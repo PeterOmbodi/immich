@@ -2731,8 +2731,7 @@ final class Schema7 extends i0.VersionedSchema {
     memoryAssetEntity,
     personEntity,
     assetFaceEntity,
-    trashSyncEntity,
-    idxTrashSyncChecksum,
+    idxLatLng,
   ];
   late final Shape16 userEntity = Shape16(
     source: i0.VersionedTable(
@@ -2848,11 +2847,11 @@ final class Schema7 extends i0.VersionedSchema {
   );
   final i1.Index idxLocalAssetChecksum = i1.Index(
     'idx_local_asset_checksum',
-    'CREATE INDEX idx_local_asset_checksum ON local_asset_entity (checksum)',
+    'CREATE INDEX IF NOT EXISTS idx_local_asset_checksum ON local_asset_entity (checksum)',
   );
   final i1.Index idxRemoteAssetOwnerChecksum = i1.Index(
     'idx_remote_asset_owner_checksum',
-    'CREATE INDEX idx_remote_asset_owner_checksum ON remote_asset_entity (owner_id, checksum)',
+    'CREATE INDEX IF NOT EXISTS idx_remote_asset_owner_checksum ON remote_asset_entity (owner_id, checksum)',
   );
   final i1.Index uQRemoteAssetsOwnerChecksum = i1.Index(
     'UQ_remote_assets_owner_checksum',
@@ -2864,7 +2863,7 @@ final class Schema7 extends i0.VersionedSchema {
   );
   final i1.Index idxRemoteAssetChecksum = i1.Index(
     'idx_remote_asset_checksum',
-    'CREATE INDEX idx_remote_asset_checksum ON remote_asset_entity (checksum)',
+    'CREATE INDEX IF NOT EXISTS idx_remote_asset_checksum ON remote_asset_entity (checksum)',
   );
   late final Shape4 userMetadataEntity = Shape4(
     source: i0.VersionedTable(
@@ -3044,43 +3043,12 @@ final class Schema7 extends i0.VersionedSchema {
     ),
     alias: null,
   );
-  late final Shape18 trashSyncEntity = Shape18(
-    source: i0.VersionedTable(
-      entityName: 'trash_sync_entity',
-      withoutRowId: true,
-      isStrict: true,
-      tableConstraints: ['PRIMARY KEY(id)'],
-      columns: [_column_0, _column_13, _column_87],
-      attachedDatabase: database,
-    ),
-    alias: null,
-  );
-  final i1.Index idxTrashSyncChecksum = i1.Index(
-    'idx_trash_sync_checksum',
-    'CREATE INDEX idx_trash_sync_checksum ON trash_sync_entity (checksum)',
+  final i1.Index idxLatLng = i1.Index(
+    'idx_lat_lng',
+    'CREATE INDEX IF NOT EXISTS idx_lat_lng ON remote_exif_entity (latitude, longitude)',
   );
 }
 
-class Shape18 extends i0.VersionedTable {
-  Shape18({required super.source, required super.alias}) : super.aliased();
-  i1.GeneratedColumn<String> get id =>
-      columnsByName['id']! as i1.GeneratedColumn<String>;
-  i1.GeneratedColumn<String> get checksum =>
-      columnsByName['checksum']! as i1.GeneratedColumn<String>;
-  i1.GeneratedColumn<bool> get isSyncApproved =>
-      columnsByName['is_sync_approved']! as i1.GeneratedColumn<bool>;
-}
-
-i1.GeneratedColumn<bool> _column_87(String aliasedName) =>
-    i1.GeneratedColumn<bool>(
-      'is_sync_approved',
-      aliasedName,
-      true,
-      type: i1.DriftSqlType.bool,
-      defaultConstraints: i1.GeneratedColumn.constraintIsAlways(
-        'CHECK ("is_sync_approved" IN (0, 1))',
-      ),
-    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
