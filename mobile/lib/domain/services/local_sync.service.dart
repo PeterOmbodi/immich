@@ -404,11 +404,15 @@ class LocalSyncService {
         _log.info("Moving to trash ${mediaUrls.join(", ")} assets");
         final result = await _localFilesManager.moveToTrash(mediaUrls.nonNulls.toList());
         if (result) {
-          await _trashedLocalAssetRepository.trashLocalAsset(localAssetsToTrash);
+          await _trashedLocalAssetRepository.trashLocalAssets(localAssetsToTrash);
         }
       }
     } else {
       _log.info("syncTrashedAssets, No assets found in backup-enabled albums for move to trash");
+    }
+    if (reviewMode) {
+      final result = await _trashSyncRepository.deleteOutdatedThrottled();
+      _log.info("syncTrashedAssets, outdated deleted: $result");
     }
   }
 }
@@ -450,9 +454,19 @@ extension PlatformToLocalAsset on PlatformAsset {
     durationInSeconds: durationInSeconds,
     isFavorite: isFavorite,
     orientation: orientation,
+    playbackStyle: _toPlaybackStyle(playbackStyle),
     adjustmentTime: tryFromSecondsSinceEpoch(adjustmentTime, isUtc: true),
     latitude: latitude,
     longitude: longitude,
     isEdited: false,
   );
 }
+
+AssetPlaybackStyle _toPlaybackStyle(PlatformAssetPlaybackStyle style) => switch (style) {
+  PlatformAssetPlaybackStyle.unknown => AssetPlaybackStyle.unknown,
+  PlatformAssetPlaybackStyle.image => AssetPlaybackStyle.image,
+  PlatformAssetPlaybackStyle.video => AssetPlaybackStyle.video,
+  PlatformAssetPlaybackStyle.imageAnimated => AssetPlaybackStyle.imageAnimated,
+  PlatformAssetPlaybackStyle.livePhoto => AssetPlaybackStyle.livePhoto,
+  PlatformAssetPlaybackStyle.videoLooping => AssetPlaybackStyle.videoLooping,
+};

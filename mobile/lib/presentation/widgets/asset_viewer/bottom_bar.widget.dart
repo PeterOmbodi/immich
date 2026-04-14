@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/constants/enums.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
+import 'package:immich_mobile/domain/models/events.model.dart';
 import 'package:immich_mobile/domain/services/timeline.service.dart';
+import 'package:immich_mobile/domain/utils/event_stream.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/presentation/widgets/action_buttons/add_action_button.widget.dart';
 import 'package:immich_mobile/presentation/widgets/action_buttons/delete_action_button.widget.dart';
@@ -12,8 +14,8 @@ import 'package:immich_mobile/presentation/widgets/action_buttons/keep_on_device
 import 'package:immich_mobile/presentation/widgets/action_buttons/move_to_trash_action_button.widget.dart';
 import 'package:immich_mobile/presentation/widgets/action_buttons/share_action_button.widget.dart';
 import 'package:immich_mobile/presentation/widgets/action_buttons/upload_action_button.widget.dart';
-import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_viewer.state.dart';
-import 'package:immich_mobile/providers/infrastructure/asset_viewer/asset.provider.dart';
+import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/action.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/readonly_mode.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/trash_sync.provider.dart';
@@ -26,7 +28,7 @@ class ViewerBottomBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asset = ref.watch(currentAssetNotifier);
+    final asset = ref.watch(assetViewerProvider.select((s) => s.currentAsset));
     if (asset == null) {
       return const SizedBox.shrink();
     }
@@ -39,6 +41,7 @@ class ViewerBottomBar extends ConsumerWidget {
 
     final timelineOrigin = ref.read(timelineServiceProvider).origin;
     final isSyncTrashTimeline = timelineOrigin == TimelineOrigin.syncTrash;
+    // Remove if review is only possible in the syncTrash timeline
     final isWaitingForSyncApproval = ref.watch(isWaitingForTrashApprovalProvider(asset.checksum!)).value == true;
 
     final originalTheme = context.themeData;
@@ -48,13 +51,15 @@ class ViewerBottomBar extends ConsumerWidget {
         KeepOnDeviceActionButton(
           source: ActionSource.viewer,
           onResult: (result) {
-            //todo Step #2 logic
+            showKeepResultToast(context, result);
+            _updateView(result, ref);
           },
         ),
         MoveToTrashActionButton(
           source: ActionSource.viewer,
           onResult: (result) {
-            //todo Step #2 logic
+            showTrashResultToast(context, result);
+            _updateView(result, ref);
           },
         ),
       ] else ...[
@@ -86,18 +91,39 @@ class ViewerBottomBar extends ConsumerWidget {
                 ),
               ),
               child: Container(
-                color: Colors.black.withAlpha(125),
-                padding: EdgeInsets.only(bottom: context.padding.bottom, top: 16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (asset.isVideo) const VideoControls(),
-                    if (!isReadonlyModeEnabled)
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: actions),
-                  ],
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.black45, Colors.black12, Colors.transparent],
+                    stops: [0.0, 0.7, 1.0],
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (asset.isVideo) VideoControls(videoPlayerName: asset.heroTag),
+                      if (!isReadonlyModeEnabled)
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: actions),
+                    ],
+                  ),
                 ),
               ),
             ),
     );
+  }
+
+  void _updateView(ActionResult result, WidgetRef ref) {
+    Future.delayed(Durations.extralong4, () {
+      if (result.success) {
+        EventStream.shared.emit(const ViewerReloadAssetEvent());
+        EventStream.shared.emit(const TimelineReloadEvent());
+      }
+      if (ref.context.mounted) {
+        ref.read(assetViewerProvider.notifier).setControls(true);
+      }
+    });
   }
 }

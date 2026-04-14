@@ -2,6 +2,8 @@ import 'package:collection/collection.dart';
 import 'package:drift/drift.dart';
 import 'package:immich_mobile/constants/constants.dart';
 import 'package:immich_mobile/domain/models/asset/remote_deleted_local_asset.model.dart';
+import 'package:immich_mobile/domain/models/store.model.dart';
+import 'package:immich_mobile/infrastructure/entities/store.entity.drift.dart';
 import 'package:immich_mobile/infrastructure/entities/trash_sync.entity.drift.dart';
 import 'package:immich_mobile/infrastructure/repositories/db.repository.dart';
 
@@ -43,6 +45,65 @@ class DriftTrashSyncRepository extends DriftDatabaseRepository {
     });
   }
 
+  Future<void> updateApproves(Iterable<String> checksums, bool isSyncApproved) {
+    if (checksums.isEmpty) {
+      return Future.value();
+    }
+    return _db.batch((batch) {
+      batch.update(
+        _db.trashSyncEntity,
+        TrashSyncEntityCompanion(isSyncApproved: Value(isSyncApproved)),
+        where: (tbl) => tbl.checksum.isIn(checksums),
+      );
+    });
+  }
+
+  Future<int> deleteOutdated() async {
+    final remoteAliveSelect = _db.selectOnly(_db.remoteAssetEntity)
+      ..addColumns([_db.remoteAssetEntity.checksum])
+      ..where(_db.remoteAssetEntity.deletedAt.isNull());
+
+    final localTrashedSelect = _db.selectOnly(_db.trashedLocalAssetEntity)
+      ..addColumns([_db.trashedLocalAssetEntity.checksum]);
+
+    final query = _db.delete(_db.trashSyncEntity)
+      ..where((row) => row.isSyncApproved.isNull() | row.isSyncApproved.equals(false))
+      ..where((row) => row.checksum.isInQuery(remoteAliveSelect) | row.checksum.isInQuery(localTrashedSelect));
+
+    final deletedMatched = await query.go();
+
+    final localTrashedChecksums = _db.selectOnly(_db.trashedLocalAssetEntity)
+      ..addColumns([_db.trashedLocalAssetEntity.checksum])
+      ..where(_db.trashedLocalAssetEntity.checksum.isNotNull());
+
+    final localAssetChecksums = _db.selectOnly(_db.localAssetEntity)
+      ..addColumns([_db.localAssetEntity.checksum])
+      ..where(_db.localAssetEntity.checksum.isNotNull());
+
+    final orphanQuery = _db.delete(_db.trashSyncEntity)
+      ..where(
+        (row) =>
+            (row.isSyncApproved.equals(false) & row.checksum.isNotInQuery(localAssetChecksums)) |
+            (row.isSyncApproved.equals(true) & row.checksum.isNotInQuery(localTrashedChecksums)),
+      );
+
+    final deletedOrphans = await orphanQuery.go();
+
+    return deletedMatched + deletedOrphans;
+  }
+
+  Future<int> deleteOutdatedThrottled({Duration minInterval = const Duration(hours: 8)}) async {
+    final lastRunMillis = await _getLastCleanupTimeMillis();
+    final nowMillis = DateTime.now().millisecondsSinceEpoch;
+    if (lastRunMillis != null && nowMillis - lastRunMillis < minInterval.inMilliseconds) {
+      return 0;
+    }
+
+    final result = await deleteOutdated();
+    await _setLastCleanupTimeMillis(nowMillis);
+    return result;
+  }
+
   Stream<int> watchPendingApprovalAssetCount() {
     final countExpr = _db.trashSyncEntity.checksum.count(distinct: true);
 
@@ -59,5 +120,18 @@ class DriftTrashSyncRepository extends DriftDatabaseRepository {
       ..where((_db.trashSyncEntity.checksum.equals(checksum) & _db.trashSyncEntity.isSyncApproved.isNull()))
       ..limit(1);
     return query.watchSingleOrNull().map((row) => row != null).distinct();
+  }
+
+  Future<int?> _getLastCleanupTimeMillis() async {
+    final entity = await _db.managers.storeEntity
+        .filter((entity) => entity.id.equals(StoreKey.trashSyncLastCleanup.id))
+        .getSingleOrNull();
+    return entity?.intValue;
+  }
+
+  Future<void> _setLastCleanupTimeMillis(int millis) async {
+    await _db.storeEntity.insertOnConflictUpdate(
+      StoreEntityCompanion(id: Value(StoreKey.trashSyncLastCleanup.id), intValue: Value(millis)),
+    );
   }
 }

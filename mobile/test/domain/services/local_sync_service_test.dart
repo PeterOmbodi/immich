@@ -72,11 +72,12 @@ void main() {
     when(() => mockLocalAssetRepository.getToTrash()).thenAnswer((_) async =>
         <String, List<RemoteDeletedLocalAsset>>{});
     when(() => mockTrashedLocalAssetRepository.applyRestoredAssets(any())).thenAnswer((_) async {});
-    when(() => mockTrashedLocalAssetRepository.trashLocalAsset(any())).thenAnswer((_) async {});
+    when(() => mockTrashedLocalAssetRepository.trashLocalAssets(any())).thenAnswer((_) async {});
     when(() => mockLocalFilesManager.moveToTrash(any<List<String>>())).thenAnswer((_) async => true);
     when(() => mockStorageRepository.getAssetEntityForAsset(any())).thenAnswer((_) async => null);
     when(() => mockTrashSyncRepo.upsertReviewCandidates(any<Iterable<RemoteDeletedLocalAsset>>())).thenAnswer((
         _) async {});
+    when(() => mockTrashSyncRepo.deleteOutdatedThrottled()).thenAnswer((_) async => 0);
 
     sut = LocalSyncService(
       localAlbumRepository: mockLocalAlbumRepository,
@@ -151,6 +152,7 @@ void main() {
         durationInSeconds: 0,
         orientation: 0,
         isFavorite: false,
+        playbackStyle: PlatformAssetPlaybackStyle.image,
       );
 
       final localAssetToTrash = LocalAssetStub.image2.copyWith(id: 'local-trash', checksum: 'checksum-review');
@@ -169,8 +171,9 @@ void main() {
 
       verify(() => mockLocalAssetRepository.getToTrash()).called(1);
       verify(() => mockTrashSyncRepo.upsertReviewCandidates(any<Iterable<RemoteDeletedLocalAsset>>())).called(1);
+      verify(() => mockTrashSyncRepo.deleteOutdatedThrottled()).called(1);
       verifyNever(() => mockLocalFilesManager.moveToTrash(any()));
-      verifyNever(() => mockTrashedLocalAssetRepository.trashLocalAsset(any()));
+      verifyNever(() => mockTrashedLocalAssetRepository.trashLocalAssets(any()));
     });
 
     test('processes trashed snapshot, restores assets, and trashes local files', () async {
@@ -181,6 +184,7 @@ void main() {
         durationInSeconds: 0,
         orientation: 0,
         isFavorite: false,
+        playbackStyle: PlatformAssetPlaybackStyle.image
       );
 
       final assetsToRestore = [LocalAssetStub.image1];
@@ -227,7 +231,7 @@ void main() {
       final moveArgs = verify(() => mockLocalFilesManager.moveToTrash(captureAny())).captured.single as List<String>;
       expect(moveArgs, ['content://local-trash']);
       final trashArgs =
-          verify(() => mockTrashedLocalAssetRepository.trashLocalAsset(captureAny())).captured.single
+          verify(() => mockTrashedLocalAssetRepository.trashLocalAssets(captureAny())).captured.single
           as Map<String, List<RemoteDeletedLocalAsset>>;
       expect(trashArgs.keys, ['album-a']);
       expect(trashArgs['album-a']!.length, 1);
@@ -256,7 +260,7 @@ void main() {
       await sut.processTrashedAssets({});
 
       verifyNever(() => mockLocalFilesManager.moveToTrash(any()));
-      verifyNever(() => mockTrashedLocalAssetRepository.trashLocalAsset(any()));
+      verifyNever(() => mockTrashedLocalAssetRepository.trashLocalAssets(any()));
     });
   });
 
@@ -271,6 +275,7 @@ void main() {
         isFavorite: false,
         createdAt: 1700000000,
         updatedAt: 1732000000,
+        playbackStyle: PlatformAssetPlaybackStyle.image
       );
 
       final localAsset = platformAsset.toLocalAsset();

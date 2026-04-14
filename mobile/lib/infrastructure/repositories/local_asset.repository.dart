@@ -257,4 +257,45 @@ class DriftLocalAssetRepository extends DriftDatabaseRepository {
 
     return result;
   }
+
+  Future<List<RemoteDeletedLocalAsset>> getRemoteTrashedLocalAssets(Iterable<String> checksums) {
+    if (checksums.isEmpty) {
+      return Future.value([]);
+    }
+
+    final selectionQuery =
+        _db.localAlbumAssetEntity.selectOnly().join([
+            innerJoin(
+              _db.localAlbumEntity,
+              _db.localAlbumAssetEntity.albumId.equalsExp(_db.localAlbumEntity.id),
+              useColumns: false,
+            ),
+          ])
+          ..addColumns([_db.localAlbumAssetEntity.assetId])
+          ..where(
+            _db.localAlbumAssetEntity.assetId.equalsExp(_db.localAssetEntity.id) &
+                _db.localAlbumEntity.backupSelection.equalsValue(BackupSelection.selected),
+          );
+
+    final query = _db.localAssetEntity.select().addColumns([_db.remoteAssetEntity.deletedAt]).join([
+      innerJoin(
+        _db.remoteAssetEntity,
+        _db.localAssetEntity.checksum.equalsExp(_db.remoteAssetEntity.checksum),
+        useColumns: false,
+      ),
+    ]);
+
+    final whereClause =
+        _db.localAssetEntity.checksum.isIn(checksums) &
+        existsQuery(selectionQuery) &
+        _db.remoteAssetEntity.deletedAt.isNotNull();
+
+    query.where(whereClause);
+
+    return query.map((row) {
+      final asset = row.readTable(_db.localAssetEntity).toDto();
+      final remoteDeletedAt = row.read(_db.remoteAssetEntity.deletedAt)!;
+      return RemoteDeletedLocalAsset(asset: asset, remoteDeletedAt: remoteDeletedAt);
+    }).get();
+  }
 }

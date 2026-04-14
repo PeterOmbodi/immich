@@ -11,17 +11,23 @@ import 'package:immich_mobile/extensions/platform_extensions.dart';
 import 'package:immich_mobile/infrastructure/repositories/local_asset.repository.dart';
 import 'package:immich_mobile/infrastructure/repositories/remote_album.repository.dart';
 import 'package:immich_mobile/infrastructure/repositories/remote_asset.repository.dart';
+import 'package:immich_mobile/infrastructure/repositories/storage.repository.dart';
+import 'package:immich_mobile/infrastructure/repositories/trash_sync.repository.dart';
 import 'package:immich_mobile/infrastructure/repositories/trashed_local_asset.repository.dart';
 import 'package:immich_mobile/providers/infrastructure/album.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/storage.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/trash_sync.provider.dart';
 import 'package:immich_mobile/repositories/asset_api.repository.dart';
 import 'package:immich_mobile/repositories/asset_media.repository.dart';
 import 'package:immich_mobile/repositories/download.repository.dart';
 import 'package:immich_mobile/repositories/drift_album_api_repository.dart';
+import 'package:immich_mobile/repositories/local_files_manager.repository.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/utils/timezone.dart';
 import 'package:immich_mobile/widgets/common/date_time_picker.dart';
 import 'package:immich_mobile/widgets/common/location_picker.dart';
+import 'package:logging/logging.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -33,8 +39,12 @@ final actionServiceProvider = Provider<ActionService>(
     ref.watch(driftAlbumApiRepositoryProvider),
     ref.watch(remoteAlbumRepository),
     ref.watch(trashedLocalAssetRepository),
+    ref.watch(trashSyncRepositoryProvider),
     ref.watch(assetMediaRepositoryProvider),
     ref.watch(downloadRepositoryProvider),
+    ref.watch(storageRepositoryProvider),
+    ref.watch(localFilesManagerRepositoryProvider),
+    Logger('ActionService'),
   ),
 );
 
@@ -45,8 +55,12 @@ class ActionService {
   final DriftAlbumApiRepository _albumApiRepository;
   final DriftRemoteAlbumRepository _remoteAlbumRepository;
   final DriftTrashedLocalAssetRepository _trashedLocalAssetRepository;
+  final DriftTrashSyncRepository _trashSyncRepository;
   final AssetMediaRepository _assetMediaRepository;
   final DownloadRepository _downloadRepository;
+  final StorageRepository _storageRepository;
+  final LocalFilesManagerRepository _localFilesManager;
+  final Logger _logger;
 
   const ActionService(
     this._assetApiRepository,
@@ -55,8 +69,12 @@ class ActionService {
     this._albumApiRepository,
     this._remoteAlbumRepository,
     this._trashedLocalAssetRepository,
+    this._trashSyncRepository,
     this._assetMediaRepository,
     this._downloadRepository,
+    this._storageRepository,
+    this._localFilesManager,
+    this._logger,
   );
 
   Future<void> shareLink(List<String> remoteIds, BuildContext context) async {
@@ -257,5 +275,41 @@ class ActionService {
       await _localAssetRepository.delete(deletedIds);
     }
     return deletedIds.length;
+  }
+
+  Future<int> resolveRemoteTrash(Iterable<String> trashedChecksums, {required bool isSyncApproved}) async {
+    if (!isSyncApproved) {
+      await _trashSyncRepository.updateApproves(trashedChecksums, false);
+      return trashedChecksums.length;
+    }
+    final assetsToTrash = await _localAssetRepository.getRemoteTrashedLocalAssets(trashedChecksums);
+    if (assetsToTrash.isEmpty) {
+      // No localAssetEntity found; close review to avoid re-showing the same items.
+      await _trashSyncRepository.updateApproves(trashedChecksums, true);
+      return 0;
+    }
+    final mediaUrls = await Future.wait(
+      assetsToTrash.map((e) => _storageRepository.getAssetEntityForAsset(e.asset).then((e) => e?.getMediaUrl())),
+    );
+    final trashUrls = mediaUrls.nonNulls;
+    _logger.info("Moving assets to trash: ${trashUrls.join(", ")}");
+
+    if (trashUrls.isNotEmpty) {
+      final isMoved = await _localFilesManager.moveToTrash(trashUrls.toList());
+      if (!isMoved) {
+        return 0;
+      }
+    }
+
+    await _trashSyncRepository.updateApproves(trashedChecksums, true);
+
+    final trashedAssetsMap = Map<String, DateTime>.fromEntries(
+      assetsToTrash.map((e) => MapEntry(e.asset.checksum!, e.remoteDeletedAt)),
+    );
+
+    final assetsByAlbum = await _localAssetRepository.getAssetsFromBackupAlbums(trashedAssetsMap);
+    await _trashedLocalAssetRepository.trashLocalAssets(assetsByAlbum);
+
+    return trashUrls.length;
   }
 }
