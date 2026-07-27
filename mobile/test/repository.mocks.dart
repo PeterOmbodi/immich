@@ -1,6 +1,5 @@
 import 'package:immich_mobile/domain/services/tag.service.dart';
 import 'package:immich_mobile/infrastructure/repositories/remote_exif.repository.dart';
-import 'package:immich_mobile/domain/services/tag.service.dart';
 import 'package:immich_mobile/repositories/asset_api.repository.dart';
 import 'package:immich_mobile/repositories/asset_media.repository.dart';
 import 'package:immich_mobile/repositories/auth.repository.dart';

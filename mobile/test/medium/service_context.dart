@@ -7,8 +7,8 @@ import 'package:immich_mobile/repositories/partner_api.repository.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../api.mocks.dart';
-import '../domain/service.mock.dart';
 import '../repository.mocks.dart';
+import '../service.mocks.dart';
 import '../utils.dart';
 import 'repository_context.dart';
 
