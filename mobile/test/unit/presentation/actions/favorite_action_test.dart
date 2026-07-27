@@ -9,7 +9,7 @@ import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_ui/immich_ui.dart';
 import 'package:mocktail/mocktail.dart';
 
-import '../../../domain/service.mock.dart';
+import '../../../service.mocks.dart';
 import '../../factories/remote_asset_factory.dart';
 import '../presentation_context.dart';
 
