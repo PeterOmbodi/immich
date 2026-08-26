@@ -40,9 +40,9 @@ class AndroidViewIntentHandler {
   Future<void> flushDeferredViewIntent() => _flushPending();
 
   Future<void> _checkForViewIntent() async {
-    final ViewIntentPayload? attachment;
+    final ViewIntentPayload? intentPayload;
     try {
-      attachment = await _viewIntentService.consumeViewIntent();
+      intentPayload = await _viewIntentService.consumeViewIntent();
     } on PlatformException catch (error, stackTrace) {
       if (error.code != viewIntentUnavailableErrorCode) {
         rethrow;
@@ -53,8 +53,8 @@ class AndroidViewIntentHandler {
       await _router.replaceAll([const TabShellRoute()]);
       return;
     }
-    if (attachment != null) {
-      await handle(attachment);
+    if (intentPayload != null) {
+      await handle(intentPayload);
       return;
     }
 
