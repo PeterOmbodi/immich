@@ -13,7 +13,6 @@ import 'package:immich_mobile/platform/view_intent_api.g.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/auth.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
-import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/view_intent/active_view_intent_payload_provider.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_file_path.provider.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_handler_android.dart';
@@ -32,8 +31,6 @@ class MockViewIntentHostApi extends Mock implements ViewIntentHostApi {}
 class MockViewIntentAssetResolver extends Mock implements ViewIntentAssetResolver {}
 
 class MockAssetService extends Mock implements AssetService {}
-
-class MockTimelineFactory extends Mock implements TimelineFactory {}
 
 class MockAppRouter extends Mock implements AppRouter {}
 
@@ -110,7 +107,6 @@ void main() {
   late TestViewIntentService viewIntentService;
   late MockViewIntentAssetResolver resolver;
   late MockAssetService assetService;
-  late MockTimelineFactory timelineFactory;
   late MockAppRouter router;
   late TestAuthNotifier authNotifier;
   late ProviderContainer container;
@@ -134,7 +130,6 @@ void main() {
     viewIntentService = TestViewIntentService();
     resolver = MockViewIntentAssetResolver();
     assetService = MockAssetService();
-    timelineFactory = MockTimelineFactory();
     router = MockAppRouter();
     payload = ViewIntentPayload(path: '/tmp/incoming.jpg', mimeType: 'image/jpeg', localAssetId: 'local-1');
     deepLinkAsset = _localAsset(id: 'local-1');
@@ -150,7 +145,6 @@ void main() {
         viewIntentServiceProvider.overrideWithValue(viewIntentService),
         viewIntentAssetResolverProvider.overrideWithValue(resolver),
         assetServiceProvider.overrideWithValue(assetService),
-        timelineFactoryProvider.overrideWithValue(timelineFactory),
         appRouterProvider.overrideWithValue(router),
         authProvider.overrideWith((ref) {
           authNotifier = TestAuthNotifier(ref, _authState(isAuthenticated: true));
@@ -326,6 +320,23 @@ void main() {
     expect(container.read(activeViewIntentPayloadProvider), isNull);
     expect(container.read(viewIntentFilePathProvider), isNull);
     expect(viewIntentService.cleanedManagedTempPaths, [path]);
+  });
+
+  test('opens a trashed remote asset returned by the resolver', () async {
+    final routeClosed = Completer<Object?>();
+    final trashedAsset = _remoteAsset(id: 'remote-trashed', localId: 'local-1', deletedAt: DateTime(2026, 8, 4));
+    when(() => router.push<Object?>(any())).thenAnswer((_) => routeClosed.future);
+    when(
+      () => resolver.resolve(payload),
+    ).thenAnswer((_) async => ViewIntentResolution(asset: trashedAsset, timelineService: deepLinkTimelineService));
+
+    final handling = handler.handle(payload);
+    await pumpEventQueue();
+
+    expect(container.read(assetViewerProvider).currentAsset, trashedAsset);
+
+    routeClosed.complete(null);
+    await handling;
   });
 }
 
