@@ -109,7 +109,7 @@ enum ActionButtonType {
         context.isOwner && //
             !context.isInLockedView && //
             context.asset.hasRemote && //
-            context.timelineOrigin == TimelineOrigin.trash,
+            context.asset.isEffectivelyTrashed(context.timelineOrigin),
       ActionButtonType.delete => true,
       ActionButtonType.moveToLockFolder =>
         context.isOwner && //
@@ -135,7 +135,7 @@ enum ActionButtonType {
             context.selectedCount == 1,
       ActionButtonType.unstack =>
         context.isOwner && //
-            context.timelineOrigin != TimelineOrigin.trash &&
+            !context.asset.isEffectivelyTrashed(context.timelineOrigin) &&
             !context.isInLockedView && //
             context.isStacked,
       ActionButtonType.openInBrowser => context.asset.hasRemote && !context.isInLockedView,

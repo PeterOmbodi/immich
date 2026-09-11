@@ -59,9 +59,7 @@ void main() {
     final drift = MockDrift();
     when(() => drift.localAssetRepository).thenReturn(mockLocalAssetRepository);
     when(() => drift.timelineRepository).thenReturn(timelineRepository);
-    when(
-      () => timelineRepository.getViewableRemoteAssetsByChecksum(any(), any()),
-    ).thenAnswer((_) async => const []);
+    when(() => timelineRepository.getViewableRemoteAssetsByChecksum(any(), any())).thenAnswer((_) async => const []);
 
     container = ProviderContainer(
       overrides: [
@@ -107,7 +105,7 @@ void main() {
     verifyNever(() => nativeSyncApi.hashAssets(any()));
   });
 
-  test('falls back to the local asset when its linked remote asset is trashed', () async {
+  test('returns the linked remote asset when it is trashed', () async {
     final localAsset = _localAsset(id: 'local-1', checksum: 'checksum-1', remoteId: 'remote-1');
     final remoteAsset = _remoteAsset(id: 'remote-1', checksum: 'checksum-1', deletedAt: DateTime(2026, 4, 21));
     when(() => mockLocalAssetRepository.get('local-1')).thenAnswer((_) async => localAsset);
@@ -115,7 +113,7 @@ void main() {
 
     final result = await _resolve(container, _payload(localAssetId: 'local-1'));
 
-    expect(result.asset, equals(localAsset));
+    expect(result.asset, equals(remoteAsset.copyWith(localId: localAsset.id)));
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
     expect(result.viewIntentFilePath, isNull);
   });
