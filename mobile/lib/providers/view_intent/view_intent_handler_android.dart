@@ -7,7 +7,6 @@ import 'package:immich_mobile/platform/view_intent_api.g.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/auth.provider.dart';
 import 'package:immich_mobile/providers/view_intent/active_view_intent_payload_provider.dart';
-import 'package:immich_mobile/providers/view_intent/view_intent_file_path.provider.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_pending.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/services/view_intent.service.dart';
@@ -86,20 +85,17 @@ class AndroidViewIntentHandler {
       asset: resolvedAsset.asset,
       timelineService: resolvedAsset.timelineService,
       attachment: payload,
-      viewIntentFilePath: resolvedAsset.viewIntentFilePath,
     );
   }
 
   void _activateViewIntent(ViewIntentPayload attachment) {
     _ref.read(activeViewIntentPayloadProvider.notifier).setPayload(attachment);
-    _ref.read(viewIntentFilePathProvider.notifier).clear();
     unawaited(_viewIntentService.cleanupManagedTempFile());
     _router.popUntilRoot();
   }
 
   void _clearCurrentViewIntent() {
     _ref.read(activeViewIntentPayloadProvider.notifier).clear();
-    _ref.read(viewIntentFilePathProvider.notifier).clear();
     unawaited(_viewIntentService.cleanupManagedTempFile());
   }
 
@@ -107,7 +103,6 @@ class AndroidViewIntentHandler {
     required BaseAsset asset,
     required TimelineService timelineService,
     required ViewIntentPayload attachment,
-    String? viewIntentFilePath,
   }) async {
     final notifier = _ref.read(assetViewerProvider.notifier);
     notifier.reset();
@@ -116,11 +111,15 @@ class AndroidViewIntentHandler {
     }
     notifier.setAsset(asset);
 
-    if (viewIntentFilePath != null) {
-      _ref.read(viewIntentFilePathProvider.notifier).setPath(viewIntentFilePath);
-      unawaited(_viewIntentService.setManagedTempFilePath(viewIntentFilePath));
+    final fileBackedPath = switch (asset) {
+      FileBackedAsset(:final path) => path,
+      _ => null,
+    };
+    if (fileBackedPath != null) {
+      unawaited(_viewIntentService.setManagedTempFilePath(fileBackedPath));
+    } else if (attachment.path case final path?) {
+      await _viewIntentService.cleanupTempFile(path);
     } else {
-      _ref.read(viewIntentFilePathProvider.notifier).clear();
       unawaited(_viewIntentService.cleanupManagedTempFile());
     }
 
@@ -128,9 +127,8 @@ class AndroidViewIntentHandler {
       await _router.push(AssetViewerRoute(initialIndex: 0, timelineService: timelineService));
     } finally {
       _ref.read(activeViewIntentPayloadProvider.notifier).clearIfMatch(attachment);
-      if (viewIntentFilePath != null) {
-        _ref.read(viewIntentFilePathProvider.notifier).clearIfMatch(viewIntentFilePath);
-        await _viewIntentService.cleanupManagedTempFileIfCurrent(viewIntentFilePath);
+      if (fileBackedPath != null) {
+        await _viewIntentService.cleanupManagedTempFileIfCurrent(fileBackedPath);
       }
     }
   }

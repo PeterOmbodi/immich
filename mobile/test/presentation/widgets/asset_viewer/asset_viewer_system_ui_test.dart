@@ -6,10 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/constants/locales.dart';
+import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/timeline.model.dart';
 import 'package:immich_mobile/domain/services/timeline.service.dart';
 import 'package:immich_mobile/generated/codegen_loader.g.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_viewer.page.dart';
+import 'package:immich_mobile/presentation/widgets/asset_viewer/file_backed_asset_viewer.widget.dart';
+import 'package:immich_mobile/presentation/widgets/asset_viewer/viewer_bottom_app_bar.widget.dart';
+import 'package:immich_mobile/presentation/widgets/asset_viewer/viewer_top_app_bar.widget.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 
@@ -21,6 +25,23 @@ class _SeededAssetViewerNotifier extends AssetViewerStateNotifier {
   AssetViewerState build() {
     super.build();
     return AssetViewerState(currentAsset: LocalAssetStub.image1);
+  }
+}
+
+class _FileBackedAssetViewerNotifier extends AssetViewerStateNotifier {
+  @override
+  AssetViewerState build() {
+    super.build();
+    return AssetViewerState(
+      currentAsset: FileBackedAsset(
+        path: 'C:/cache/view_intent.jpg',
+        checksum: 'checksum',
+        name: 'view_intent.jpg',
+        type: AssetType.image,
+        createdAt: DateTime(2024),
+        updatedAt: DateTime(2024),
+      ),
+    );
   }
 }
 
@@ -93,5 +114,39 @@ void main() {
           'The asset viewer draws over a black background, so status bar '
           'icons must be light regardless of the app theme',
     );
+  });
+
+  testWidgets('uses the dedicated presentation for a file-backed asset', (tester) async {
+    await tester.pumpWidget(
+      EasyLocalization(
+        supportedLocales: locales.values.toList(),
+        path: translationsPath,
+        startLocale: locales.values.first,
+        fallbackLocale: locales.values.first,
+        saveLocale: false,
+        useFallbackTranslations: true,
+        assetLoader: const CodegenLoader(),
+        child: ProviderScope(
+          overrides: [
+            ...context.overrides,
+            timelineServiceProvider.overrideWithValue(_stubTimelineService()),
+            assetViewerProvider.overrideWith(_FileBackedAssetViewerNotifier.new),
+          ],
+          child: Builder(
+            builder: (context) => MaterialApp(
+              localizationsDelegates: context.localizationDelegates,
+              supportedLocales: context.supportedLocales,
+              locale: context.locale,
+              home: const Material(child: AssetViewer(initialIndex: 0)),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(FileBackedAssetViewer), findsOneWidget);
+    expect(find.byType(ViewerTopAppBar), findsNothing);
+    expect(find.byType(ViewerBottomAppBar), findsNothing);
   });
 }

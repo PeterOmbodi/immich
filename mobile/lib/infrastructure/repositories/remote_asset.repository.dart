@@ -78,6 +78,21 @@ class RemoteAssetRepository extends DatabaseAccessor<Drift> with $RemoteAssetRep
     });
   }
 
+  /// Watches the current user's visible upload-library asset matching [checksum].
+  Stream<RemoteAsset?> watchOwnedRemoteByChecksum(String checksum) {
+    final rae = _db.remoteAssetEntity;
+    final currentUser = _db.authUserEntity;
+    final remoteMatch =
+        rae.checksum.equals(checksum) &
+        rae.ownerId.equalsExp(currentUser.id) &
+        rae.libraryId.isNull() &
+        rae.deletedAt.isNull() &
+        rae.visibility.equals(AssetVisibility.timeline.index);
+
+    final query = currentUser.select().join([leftOuterJoin(rae, remoteMatch)])..limit(1);
+    return query.watchSingleOrNull().map((row) => row?.readTableOrNull(rae)?.toDto());
+  }
+
   Future<List<RemoteAsset>> getAllDebugForChecksum(String checksum) {
     final query = _db.remoteAssetEntity.select()..where((row) => row.checksum.equals(checksum));
 

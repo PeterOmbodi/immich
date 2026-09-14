@@ -50,7 +50,6 @@ void main() {
 
     when(() => mockLocalAssetRepository.get(any())).thenAnswer((_) async => null);
     when(() => assetService.getRemoteAsset(any())).thenAnswer((_) async => null);
-    when(() => assetService.getAllRemoteAssetDebugByChecksum(any())).thenAnswer((_) async => const []);
     when(() => nativeSyncApi.hashAssets(any())).thenAnswer((_) async => const []);
     when(() => mockLocalAssetRepository.updateHashes(any())).thenAnswer((_) async {});
 
@@ -59,9 +58,7 @@ void main() {
     final drift = MockDrift();
     when(() => drift.localAssetRepository).thenReturn(mockLocalAssetRepository);
     when(() => drift.timelineRepository).thenReturn(timelineRepository);
-    when(
-      () => timelineRepository.getViewableRemoteAssetsByChecksum(any(), any()),
-    ).thenAnswer((_) async => const []);
+    when(() => timelineRepository.getViewableRemoteAssetsByChecksum(any(), any())).thenAnswer((_) async => const []);
 
     container = ProviderContainer(
       overrides: [
@@ -89,7 +86,6 @@ void main() {
 
     expect(result.asset, equals(localAsset));
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
-    expect(result.viewIntentFilePath, isNull, reason: 'DB-backed assets carry their own source — no temp file needed');
   });
 
   test('returns remote merged asset when local checksum matches remote asset', () async {
@@ -103,7 +99,6 @@ void main() {
     expect(result.asset, isA<RemoteAsset>());
     expect((result.asset as RemoteAsset).localId, 'local-1');
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
-    expect(result.viewIntentFilePath, isNull);
     verifyNever(() => nativeSyncApi.hashAssets(any()));
   });
 
@@ -117,7 +112,6 @@ void main() {
 
     expect(result.asset, equals(localAsset));
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
-    expect(result.viewIntentFilePath, isNull);
   });
 
   test('hashes local asset without checksum and returns remote merged asset', () async {
@@ -139,20 +133,18 @@ void main() {
     expect(result.asset, isA<RemoteAsset>());
     expect((result.asset as RemoteAsset).localId, 'local-1');
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
-    expect(result.viewIntentFilePath, isNull);
     verify(() => nativeSyncApi.hashAssets(['local-1'])).called(1);
     verify(() => mockLocalAssetRepository.updateHashes({'local-1': 'checksum-1'})).called(1);
     verify(() => mockLocalAssetRepository.get('local-1')).called(2);
   });
 
-  test('returns transient asset with temp file path when localAssetId has no DB row', () async {
+  test('returns a transient local asset when localAssetId has no DB row', () async {
     when(() => mockLocalAssetRepository.get('local-1')).thenAnswer((_) async => null);
 
     final result = await _resolve(container, _payload(localAssetId: 'local-1', path: '/tmp/incoming.jpg'));
 
     expect(result.asset, isA<LocalAsset>());
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
-    expect(result.viewIntentFilePath, '/tmp/incoming.jpg');
   });
 
   test('returns cached remote asset when local Drift row is absent but checksum matches', () async {
@@ -172,27 +164,48 @@ void main() {
     expect((result.asset as RemoteAsset).localId, 'local-1');
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
     verify(() => timelineRepository.getViewableRemoteAssetsByChecksum(['user-1'], 'checksum-1')).called(1);
-    verifyNever(() => assetService.getAllRemoteAssetDebugByChecksum(any()));
   });
 
-  test('returns transient asset for path-only attachment', () async {
+  test('returns a file-backed asset for a materialized path-only attachment', () async {
     final result = await _resolve(
       container,
-      _payload(localAssetId: null, path: '/tmp/incoming.webp', mimeType: 'image/webp'),
+      _payload(localAssetId: null, path: '/tmp/incoming.webp', checksum: 'checksum-1', mimeType: 'image/webp'),
     );
 
-    expect(result.asset, isA<LocalAsset>());
+    expect(result.asset, isA<FileBackedAsset>());
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
-    expect(result.viewIntentFilePath, '/tmp/incoming.webp');
 
-    final asset = result.asset as LocalAsset;
-    expect(asset.localId, startsWith('-'));
+    final asset = result.asset as FileBackedAsset;
+    expect(asset.path, '/tmp/incoming.webp');
+    expect(asset.checksum, 'checksum-1');
     expect(asset.name, 'incoming.webp');
     expect(asset.playbackStyle, AssetPlaybackStyle.imageAnimated);
   });
 
+  test('returns a viewable remote asset for a materialized path-only checksum', () async {
+    final remoteAsset = _remoteAsset(id: 'remote-1', checksum: 'checksum-1');
+    when(
+      () => timelineRepository.getViewableRemoteAssetsByChecksum(['user-1'], 'checksum-1'),
+    ).thenAnswer((_) async => [remoteAsset]);
+
+    final result = await _resolve(
+      container,
+      _payload(localAssetId: null, path: '/tmp/incoming.jpg', checksum: 'checksum-1'),
+    );
+
+    expect(result.asset, same(remoteAsset));
+    expect(result.asset.localId, isNull);
+  });
+
   test('throws when neither localAssetId nor path is provided', () async {
     await expectLater(_resolve(container, _payload(localAssetId: null, path: null)), throwsA(isA<StateError>()));
+  });
+
+  test('throws when a path-only payload has no checksum', () async {
+    await expectLater(
+      _resolve(container, _payload(localAssetId: null, path: '/tmp/incoming.jpg')),
+      throwsA(isA<StateError>()),
+    );
   });
 }
 
@@ -200,8 +213,13 @@ Future<ViewIntentResolution> _resolve(ProviderContainer container, ViewIntentPay
   return container.read(viewIntentAssetResolverProvider).resolve(payload);
 }
 
-ViewIntentPayload _payload({String? localAssetId = 'local-1', String? path, String mimeType = 'image/jpeg'}) {
-  return ViewIntentPayload(path: path, mimeType: mimeType, localAssetId: localAssetId);
+ViewIntentPayload _payload({
+  String? localAssetId = 'local-1',
+  String? path,
+  String? checksum,
+  String mimeType = 'image/jpeg',
+}) {
+  return ViewIntentPayload(path: path, mimeType: mimeType, localAssetId: localAssetId, checksum: checksum);
 }
 
 LocalAsset _localAsset({required String id, String? checksum, String? remoteId}) {

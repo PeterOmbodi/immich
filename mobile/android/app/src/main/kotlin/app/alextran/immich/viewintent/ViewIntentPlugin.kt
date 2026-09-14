@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Base64
 import android.util.Log
 import android.webkit.MimeTypeMap
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -15,6 +16,7 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.PluginRegistry
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +24,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 private const val TAG = "ViewIntentPlugin"
+private const val HASH_BUFFER_SIZE = 64 * 1024
+
+private data class MaterializedViewIntent(val file: File, val checksum: String)
 
 class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentListener, ViewIntentHostApi {
   private var context: Context? = null
@@ -90,8 +95,8 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
         }
 
         val localAssetId = extractLocalAssetId(context, uri, mimeType)
-        val tempFilePath = if (localAssetId == null) {
-          copyUriToTempFile(context, uri, mimeType)?.absolutePath ?: run {
+        val materialized = if (localAssetId == null) {
+          materializeUri(context, uri, mimeType) ?: run {
             callback(Result.success(null))
             return@launch
           }
@@ -99,9 +104,10 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
           null
         }
         val payload = ViewIntentPayload(
-          path = tempFilePath,
+          path = materialized?.file?.absolutePath,
           mimeType = mimeType,
           localAssetId = localAssetId,
+          checksum = materialized?.checksum,
         )
         consumeViewIntent(intent)
         callback(Result.success(payload))
@@ -143,18 +149,32 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
     return if (id >= 0) id.toString() else null
   }
 
-  private fun copyUriToTempFile(context: Context, uri: Uri, mimeType: String): File? {
+  private fun materializeUri(context: Context, uri: Uri, mimeType: String): MaterializedViewIntent? {
+    var tempFile: File? = null
+    var completed = false
     return try {
       val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)?.let { ".$it" }
-      val tempFile = File.createTempFile("view_intent_", extension, context.cacheDir)
+      tempFile = File.createTempFile("view_intent_", extension, context.cacheDir)
+      val digest = MessageDigest.getInstance("SHA-1")
       context.contentResolver.openInputStream(uri)?.use { inputStream ->
         FileOutputStream(tempFile).use { outputStream ->
-          inputStream.copyTo(outputStream)
+          val buffer = ByteArray(HASH_BUFFER_SIZE)
+          while (true) {
+            val bytesRead = inputStream.read(buffer)
+            if (bytesRead == -1) break
+            outputStream.write(buffer, 0, bytesRead)
+            digest.update(buffer, 0, bytesRead)
+          }
         }
       } ?: return null
-      tempFile
+      completed = true
+      MaterializedViewIntent(tempFile, Base64.encodeToString(digest.digest(), Base64.NO_WRAP))
     } catch (_: Exception) {
       null
+    } finally {
+      if (!completed) {
+        tempFile?.delete()
+      }
     }
   }
 

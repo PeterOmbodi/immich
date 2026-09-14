@@ -15,7 +15,6 @@ import 'package:immich_mobile/providers/auth.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/view_intent/active_view_intent_payload_provider.dart';
-import 'package:immich_mobile/providers/view_intent/view_intent_file_path.provider.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_handler_android.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_pending.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
@@ -57,6 +56,7 @@ class TestViewIntentService extends ViewIntentService {
   int cleanupManagedTempFileCalls = 0;
   final List<String> managedTempPaths = [];
   final List<String> cleanedManagedTempPaths = [];
+  final List<String> cleanedTempPaths = [];
 
   TestViewIntentService() : super(MockViewIntentHostApi());
 
@@ -81,6 +81,11 @@ class TestViewIntentService extends ViewIntentService {
   @override
   Future<void> cleanupManagedTempFileIfCurrent(String path) async {
     cleanedManagedTempPaths.add(path);
+  }
+
+  @override
+  Future<void> cleanupTempFile(String path) async {
+    cleanedTempPaths.add(path);
   }
 }
 
@@ -304,28 +309,38 @@ void main() {
 
   test('closing a file-backed view intent clears only its session state', () async {
     const path = '/tmp/view_intent_1.jpg';
+    final fileBackedAsset = _fileBackedAsset(path: path);
     final routeClosed = Completer<Object?>();
     when(() => router.push<Object?>(any())).thenAnswer((_) => routeClosed.future);
-    when(() => resolver.resolve(payload)).thenAnswer(
-      (_) async => ViewIntentResolution(
-        asset: deepLinkAsset,
-        timelineService: deepLinkTimelineService,
-        viewIntentFilePath: path,
-      ),
-    );
+    when(
+      () => resolver.resolve(payload),
+    ).thenAnswer((_) async => ViewIntentResolution(asset: fileBackedAsset, timelineService: deepLinkTimelineService));
 
     final handling = handler.handle(payload);
     await pumpEventQueue();
 
     expect(container.read(activeViewIntentPayloadProvider), same(payload));
-    expect(container.read(viewIntentFilePathProvider), path);
+    expect(viewIntentService.managedTempPaths, [path]);
 
     routeClosed.complete(null);
     await handling;
 
     expect(container.read(activeViewIntentPayloadProvider), isNull);
-    expect(container.read(viewIntentFilePathProvider), isNull);
     expect(viewIntentService.cleanedManagedTempPaths, [path]);
+  });
+
+  test('discards a materialized file when its remote asset is already available', () async {
+    const path = '/tmp/cache/view_intent_remote.jpg';
+    final filePayload = ViewIntentPayload(path: path, checksum: 'checksum-1', mimeType: 'image/jpeg');
+    final remoteAsset = _remoteAsset(id: 'remote-1', localId: null);
+    when(
+      () => resolver.resolve(filePayload),
+    ).thenAnswer((_) async => ViewIntentResolution(asset: remoteAsset, timelineService: deepLinkTimelineService));
+
+    await handler.handle(filePayload);
+
+    expect(viewIntentService.cleanedTempPaths, [path]);
+    expect(viewIntentService.managedTempPaths, isEmpty);
   });
 }
 
@@ -367,6 +382,18 @@ RemoteAsset _remoteAsset({required String id, required String? localId, DateTime
     updatedAt: DateTime(2026, 4, 20),
     deletedAt: deletedAt,
     isEdited: false,
+  );
+}
+
+FileBackedAsset _fileBackedAsset({required String path}) {
+  return FileBackedAsset(
+    path: path,
+    name: 'incoming.jpg',
+    checksum: 'checksum-file',
+    type: AssetType.image,
+    createdAt: DateTime(2026, 9, 14),
+    updatedAt: DateTime(2026, 9, 14),
+    playbackStyle: AssetPlaybackStyle.image,
   );
 }
 
