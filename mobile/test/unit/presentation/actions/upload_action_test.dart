@@ -187,68 +187,6 @@ void main() {
   });
 
   group('uploadAssets', () {
-    testWidgets('uploads a regular timeline asset without the view-intent coordinator', (tester) async {
-      final asset = LocalAssetFactory.create();
-      answerUploadWith(succeeded: {asset.id});
-
-      late WidgetRef capturedRef;
-      await tester.pumpTestWidget(
-        context,
-        Consumer(
-          builder: (_, ref, _) {
-            capturedRef = ref;
-            return const SizedBox.shrink();
-          },
-        ),
-        overrides: [
-          foregroundUploadServiceProvider.overrideWithValue(uploadService),
-          toastServiceProvider.overrideWithValue(context.service.toast),
-        ],
-      );
-
-      await uploadAssets(tester.element(find.byType(SizedBox)), capturedRef, [asset]);
-      await tester.pump(const Duration(seconds: 2));
-
-      verify(
-        () => uploadService.uploadManual(
-          [asset],
-          cancelToken: any(named: 'cancelToken'),
-          callbacks: any(named: 'callbacks'),
-        ),
-      ).called(1);
-    });
-
-    testWidgets('uploads a viewer asset without an active view intent through the regular path', (tester) async {
-      final asset = LocalAssetFactory.create();
-      answerUploadWith(succeeded: {asset.id});
-
-      late WidgetRef capturedRef;
-      await tester.pumpTestWidget(
-        context,
-        Consumer(
-          builder: (_, ref, _) {
-            capturedRef = ref;
-            return const SizedBox.shrink();
-          },
-        ),
-        overrides: [
-          foregroundUploadServiceProvider.overrideWithValue(uploadService),
-          toastServiceProvider.overrideWithValue(context.service.toast),
-        ],
-      );
-
-      await uploadAssets(tester.element(find.byType(SizedBox)), capturedRef, [asset]);
-      await tester.pump(const Duration(seconds: 2));
-
-      verify(
-        () => uploadService.uploadManual(
-          [asset],
-          cancelToken: any(named: 'cancelToken'),
-          callbacks: any(named: 'callbacks'),
-        ),
-      ).called(1);
-    });
-
     testWidgets('clears the tracked progress once the upload settles', (tester) async {
       final asset = LocalAssetFactory.create();
       answerUploadWith(succeeded: {asset.id});

@@ -89,7 +89,7 @@ class _AssetViewerState extends ConsumerState<AssetViewer> {
 
   late final _heroOffset = widget.heroOffset ?? TabsRouterScope.of(context)?.controller.activeIndex ?? 0;
   late final _pageController = PageController(initialPage: widget.initialIndex);
-  late final _preloader = AssetPreloader(timelineService: ref.read(timelineServiceProvider), mounted: () => mounted);
+  late final AssetPreloader _preloader;
 
   late int _currentPage = widget.initialIndex;
   late int _totalAssets = ref.read(timelineServiceProvider).totalAssets;
@@ -113,6 +113,8 @@ class _AssetViewerState extends ConsumerState<AssetViewer> {
   @override
   void initState() {
     super.initState();
+
+    _preloader = AssetPreloader(timelineService: ref.read(timelineServiceProvider), mounted: () => mounted);
 
     final asset = ref.read(assetViewerProvider).currentAsset;
     assert(asset != null, "Current asset should not be null when opening the AssetViewer");

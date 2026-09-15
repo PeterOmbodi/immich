@@ -65,6 +65,7 @@ class UploadAction extends AssetActionBuilder {
 @visibleForTesting
 Future<void> uploadAssets(BuildContext context, WidgetRef ref, List<LocalAsset> assets) async {
   final progress = ref.read(assetUploadProgressProvider.notifier);
+  final uploads = ref.read(foregroundUploadServiceProvider);
   final toastService = ref.read(toastServiceProvider);
   final errorMessage = context.t.scaffold_body_error_occurred;
 
@@ -78,20 +79,21 @@ Future<void> uploadAssets(BuildContext context, WidgetRef ref, List<LocalAsset> 
   }
 
   try {
-    final callbacks = UploadCallbacks(
-      onProgress: (id, _, bytes, total) => progress.setProgress(id, total > 0 ? bytes / total : 0.0),
-      onSuccess: (id, _) {
-        uploaded.add(id);
-        progress.remove(id);
-      },
-      onError: (id, _) {
-        failed.add(id);
-        progress.setError(id);
-      },
+    await uploads.uploadManual(
+      assets,
+      cancelToken: cancelToken,
+      callbacks: UploadCallbacks(
+        onProgress: (id, _, bytes, total) => progress.setProgress(id, total > 0 ? bytes / total : 0.0),
+        onSuccess: (id, _) {
+          uploaded.add(id);
+          progress.remove(id);
+        },
+        onError: (id, _) {
+          failed.add(id);
+          progress.setError(id);
+        },
+      ),
     );
-    await ref
-        .read(foregroundUploadServiceProvider)
-        .uploadManual(assets, cancelToken: cancelToken, callbacks: callbacks);
   } finally {
     ref.read(manualUploadCancelTokenProvider.notifier).state = null;
   }
