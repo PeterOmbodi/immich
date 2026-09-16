@@ -13,7 +13,6 @@ import 'package:immich_mobile/platform/view_intent_api.g.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/auth.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
-import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/view_intent/active_view_intent_payload_provider.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_handler_android.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_pending.provider.dart';
@@ -32,8 +31,6 @@ class MockViewIntentAssetResolver extends Mock implements ViewIntentAssetResolve
 
 class MockAssetService extends Mock implements AssetService {}
 
-class MockTimelineFactory extends Mock implements TimelineFactory {}
-
 class MockAppRouter extends Mock implements AppRouter {}
 
 class MockAuthService extends Mock implements AuthService {}
@@ -47,8 +44,6 @@ class MockSecureStorageService extends Mock implements SecureStorageService {}
 class MockWidgetService extends Mock implements WidgetService {}
 
 class FakePageRouteInfo extends Fake implements PageRouteInfo<dynamic> {}
-
-class FakeTimelineService extends Fake implements TimelineService {}
 
 class TestViewIntentService extends ViewIntentService {
   ViewIntentPayload? consumedAttachment;
@@ -115,7 +110,6 @@ void main() {
   late TestViewIntentService viewIntentService;
   late MockViewIntentAssetResolver resolver;
   late MockAssetService assetService;
-  late MockTimelineFactory timelineFactory;
   late MockAppRouter router;
   late TestAuthNotifier authNotifier;
   late ProviderContainer container;
@@ -126,9 +120,6 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(FakePageRouteInfo());
-    registerFallbackValue(<PageRouteInfo<dynamic>>[]);
-    registerFallbackValue(FakeTimelineService());
-    registerFallbackValue(<BaseAsset>[]);
     registerFallbackValue(_remoteAsset(id: 'fallback-remote', localId: 'fallback-local'));
     registerFallbackValue(
       ViewIntentPayload(path: '/tmp/fallback.jpg', mimeType: 'image/jpeg', localAssetId: 'fallback'),
@@ -139,14 +130,11 @@ void main() {
     viewIntentService = TestViewIntentService();
     resolver = MockViewIntentAssetResolver();
     assetService = MockAssetService();
-    timelineFactory = MockTimelineFactory();
     router = MockAppRouter();
     payload = ViewIntentPayload(path: '/tmp/incoming.jpg', mimeType: 'image/jpeg', localAssetId: 'local-1');
     deepLinkAsset = _localAsset(id: 'local-1');
     deepLinkTimelineService = await _createReadyTimelineService([deepLinkAsset], TimelineOrigin.deepLink);
 
-    when(() => router.replaceAll(any())).thenAnswer((_) async {});
-    when(() => router.replace(any())).thenAnswer((_) async => null);
     when(() => router.push<Object?>(any())).thenAnswer((_) async => null);
     when(() => assetService.watchAsset(any())).thenAnswer((_) => const Stream.empty());
 
@@ -155,7 +143,6 @@ void main() {
         viewIntentServiceProvider.overrideWithValue(viewIntentService),
         viewIntentAssetResolverProvider.overrideWithValue(resolver),
         assetServiceProvider.overrideWithValue(assetService),
-        timelineFactoryProvider.overrideWithValue(timelineFactory),
         appRouterProvider.overrideWithValue(router),
         authProvider.overrideWith((ref) {
           authNotifier = TestAuthNotifier(ref, _authState(isAuthenticated: true));
@@ -182,22 +169,41 @@ void main() {
     verifyNever(() => resolver.resolve(any()));
   });
 
-  testWidgets('flushDeferredViewIntent consumes the pending attachment and routes the viewer', (tester) async {
-    authNotifier.setAuthenticated(false);
+  test('a failed resolution preserves the current view intent', () async {
+    final nextPayload = ViewIntentPayload(path: '/tmp/incoming-b.jpg', mimeType: 'image/jpeg', localAssetId: 'local-2');
+    container.read(activeViewIntentPayloadProvider.notifier).setPayload(payload);
+    when(() => resolver.resolve(nextPayload)).thenThrow(StateError('resolution failed'));
+
+    await expectLater(handler.handle(nextPayload), throwsStateError);
+
+    expect(container.read(activeViewIntentPayloadProvider), same(payload));
+    expect(viewIntentService.cleanupManagedTempFileCalls, 0);
+    verifyNever(() => router.popUntilRoot());
+    verifyNever(() => router.push<Object?>(any()));
+  });
+
+  test('flushDeferredViewIntent consumes the pending intent without waiting for viewer closure', () async {
+    final routeClosed = Completer<Object?>();
+    when(() => router.push<Object?>(any())).thenAnswer((_) => routeClosed.future);
+    when(
+      () => resolver.resolve(payload),
+    ).thenAnswer((_) async => ViewIntentResolution(asset: deepLinkAsset, timelineService: deepLinkTimelineService));
     container.read(viewIntentPendingProvider.notifier).defer(payload);
-    authNotifier.setAuthenticated(true);
 
-    when(() => resolver.resolve(payload)).thenAnswer((_) async {
-      return ViewIntentResolution(asset: deepLinkAsset, timelineService: deepLinkTimelineService);
-    });
+    var flushCompleted = false;
+    final flush = handler.flushDeferredViewIntent().whenComplete(() => flushCompleted = true);
+    await pumpEventQueue();
 
-    unawaited(handler.flushDeferredViewIntent());
-    await tester.pump();
-    await tester.pump();
-    await tester.idle();
-
+    expect(flushCompleted, isTrue);
     expect(container.read(viewIntentPendingProvider), isNull);
-    verify(() => resolver.resolve(payload)).called(1);
+    expect(container.read(activeViewIntentPayloadProvider), same(payload));
+    verify(() => router.push<Object?>(any())).called(1);
+
+    routeClosed.complete(null);
+    await flush;
+    await pumpEventQueue();
+
+    expect(container.read(activeViewIntentPayloadProvider), isNull);
   });
 
   test('flushDeferredViewIntent does nothing when there is no pending attachment', () async {
@@ -245,7 +251,20 @@ void main() {
     expect(route.routeName, AssetViewerRoute.name);
   });
 
+  test('onAppResumed does not propagate resolution errors', () async {
+    viewIntentService.consumedAttachment = payload;
+    when(() => resolver.resolve(payload)).thenThrow(StateError('resolution failed'));
+
+    await handler.onAppResumed();
+  });
+
   test('handle updates current viewer asset when a new view intent arrives', () async {
+    final firstRouteClosed = Completer<Object?>();
+    final secondRouteClosed = Completer<Object?>();
+    var pushCount = 0;
+    when(() => router.push<Object?>(any())).thenAnswer((_) {
+      return pushCount++ == 0 ? firstRouteClosed.future : secondRouteClosed.future;
+    });
     final secondPayload = ViewIntentPayload(
       path: '/tmp/incoming-b.jpg',
       mimeType: 'image/jpeg',
@@ -264,17 +283,25 @@ void main() {
 
     await handler.handle(payload);
     expect(container.read(assetViewerProvider).currentAsset, deepLinkAsset);
-    expect(container.read(activeViewIntentPayloadProvider), isNull);
+    expect(container.read(activeViewIntentPayloadProvider), same(payload));
 
     await handler.handle(secondPayload);
 
     expect(container.read(assetViewerProvider).currentAsset, secondAsset);
+    expect(container.read(activeViewIntentPayloadProvider), same(secondPayload));
+
+    firstRouteClosed.complete(null);
+    await pumpEventQueue();
+    expect(container.read(activeViewIntentPayloadProvider), same(secondPayload));
+
+    secondRouteClosed.complete(null);
+    await pumpEventQueue();
     expect(container.read(activeViewIntentPayloadProvider), isNull);
+
     verify(() => resolver.resolve(payload)).called(1);
     verify(() => resolver.resolve(secondPayload)).called(1);
     verify(() => router.popUntilRoot()).called(2);
     verify(() => router.push<Object?>(any())).called(2);
-    verifyNever(() => router.replace(any()));
     verifyNever(() => router.replaceAll(any()));
   });
 
@@ -303,7 +330,7 @@ void main() {
 
     expect(container.read(assetViewerProvider).currentAsset, secondAsset);
     expect(container.read(activeViewIntentPayloadProvider), isNull);
-    verify(() => router.popUntilRoot()).called(2);
+    verify(() => router.popUntilRoot()).called(1);
     verify(() => router.push<Object?>(any())).called(1);
   });
 
@@ -370,7 +397,7 @@ LocalAsset _localAsset({required String id, String? checksum = 'checksum-1', Str
   );
 }
 
-RemoteAsset _remoteAsset({required String id, required String? localId, DateTime? deletedAt}) {
+RemoteAsset _remoteAsset({required String id, required String? localId}) {
   return RemoteAsset(
     id: id,
     localId: localId,
@@ -380,7 +407,6 @@ RemoteAsset _remoteAsset({required String id, required String? localId, DateTime
     type: AssetType.image,
     createdAt: DateTime(2026, 4, 20),
     updatedAt: DateTime(2026, 4, 20),
-    deletedAt: deletedAt,
     isEdited: false,
   );
 }

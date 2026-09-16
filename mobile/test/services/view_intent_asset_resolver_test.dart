@@ -53,7 +53,7 @@ void main() {
     when(() => nativeSyncApi.hashAssets(any())).thenAnswer((_) async => const []);
     when(() => mockLocalAssetRepository.updateHashes(any())).thenAnswer((_) async {});
 
-    _mockTimelineFactoryOrigin(timelineFactory, createdTimelineServices, TimelineOrigin.deepLink);
+    _mockDeepLinkTimelineFactory(timelineFactory, createdTimelineServices);
 
     final drift = MockDrift();
     when(() => drift.localAssetRepository).thenReturn(mockLocalAssetRepository);
@@ -139,8 +139,6 @@ void main() {
   });
 
   test('returns a transient local asset when localAssetId has no DB row', () async {
-    when(() => mockLocalAssetRepository.get('local-1')).thenAnswer((_) async => null);
-
     final result = await _resolve(container, _payload(localAssetId: 'local-1', path: '/tmp/incoming.jpg'));
 
     expect(result.asset, isA<LocalAsset>());
@@ -152,7 +150,6 @@ void main() {
     when(
       () => nativeSyncApi.hashAssets(['local-1']),
     ).thenAnswer((_) async => [HashResult(assetId: 'local-1', hash: 'checksum-1')]);
-    when(() => assetService.getAllRemoteAssetDebugByChecksum('checksum-1')).thenAnswer((_) async => [remoteAsset]);
     when(
       () => timelineRepository.getViewableRemoteAssetsByChecksum(['user-1'], 'checksum-1'),
     ).thenAnswer((_) async => [remoteAsset]);
@@ -251,14 +248,10 @@ RemoteAsset _remoteAsset({required String id, String? localId, required String c
   );
 }
 
-void _mockTimelineFactoryOrigin(
-  MockTimelineFactory timelineFactory,
-  List<TimelineService> createdTimelineServices,
-  TimelineOrigin origin,
-) {
-  when(() => timelineFactory.fromAssets(any(), origin)).thenAnswer((invocation) {
+void _mockDeepLinkTimelineFactory(MockTimelineFactory timelineFactory, List<TimelineService> createdTimelineServices) {
+  when(() => timelineFactory.fromAssets(any(), TimelineOrigin.deepLink)).thenAnswer((invocation) {
     final assets = List<BaseAsset>.from(invocation.positionalArguments[0] as List<BaseAsset>);
-    final timelineService = _timelineServiceFromAssets(assets, origin);
+    final timelineService = _timelineServiceFromAssets(assets, TimelineOrigin.deepLink);
     createdTimelineServices.add(timelineService);
     return timelineService;
   });
