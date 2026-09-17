@@ -140,7 +140,7 @@ class ViewIntentAssetResolver {
       }
     }
 
-    if (remoteAsset == null || remoteAsset.isTrashed) {
+    if (remoteAsset == null) {
       return null;
     }
     final asset = remoteAsset.copyWith(localId: localAssetId);

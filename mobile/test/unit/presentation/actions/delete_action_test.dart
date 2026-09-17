@@ -2,13 +2,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:immich_mobile/constants/enums.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/store.model.dart';
+import 'package:immich_mobile/domain/models/timeline.model.dart';
 import 'package:immich_mobile/domain/services/store.service.dart';
+import 'package:immich_mobile/domain/services/timeline.service.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/presentation/actions/action.widget.dart';
 import 'package:immich_mobile/presentation/actions/delete.action.dart';
+import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/server_info.provider.dart';
+import 'package:immich_mobile/providers/view_intent/view_intent_asset_action_coordinator.provider.dart';
 import 'package:immich_mobile/widgets/common/confirm_dialog.dart';
 import 'package:immich_ui/immich_ui.dart';
 import 'package:mocktail/mocktail.dart';
@@ -17,6 +23,20 @@ import '../../../service.mocks.dart';
 import '../../factories/local_asset_factory.dart';
 import '../../factories/remote_asset_factory.dart';
 import '../presentation_context.dart';
+
+class _MockViewIntentAssetActionCoordinator extends Mock implements ViewIntentAssetActionCoordinator {}
+
+class _ViewerNotifier extends AssetViewerStateNotifier {
+  _ViewerNotifier(this.asset);
+
+  final BaseAsset asset;
+
+  @override
+  AssetViewerState build() {
+    super.build();
+    return AssetViewerState(currentAsset: asset);
+  }
+}
 
 void main() {
   late PresentationContext context;
@@ -257,6 +277,36 @@ void main() {
       );
 
       expect(find.byType(ImmichIconButton), findsNothing);
+    });
+
+    testWidgets('delegates a successful viewer deletion to the view intent coordinator', (tester) async {
+      final asset = owned();
+      final timeline = TimelineService((
+        assetSource: (_, _) async => [asset],
+        bucketSource: () => Stream.value(const [Bucket(assetCount: 1)]),
+        origin: TimelineOrigin.deepLink,
+      ));
+      final coordinator = _MockViewIntentAssetActionCoordinator();
+      addTearDown(timeline.dispose);
+      when(
+        () => coordinator.afterDelete(source: ActionSource.viewer, remoteAssetIds: [asset.id], movedToTrash: true),
+      ).thenAnswer((_) async {});
+
+      await tester.pumpTestWidget(
+        context,
+        const ActionIconButton(action: DeleteAction(source: .viewer)),
+        overrides: [
+          timelineServiceProvider.overrideWithValue(timeline),
+          assetViewerProvider.overrideWith(() => _ViewerNotifier(asset)),
+          viewIntentAssetActionCoordinatorProvider.overrideWithValue(coordinator),
+        ],
+      );
+      await tester.tap(find.byType(ImmichIconButton));
+      await tester.pumpAndSettle();
+
+      verify(
+        () => coordinator.afterDelete(source: ActionSource.viewer, remoteAssetIds: [asset.id], movedToTrash: true),
+      ).called(1);
     });
   });
 

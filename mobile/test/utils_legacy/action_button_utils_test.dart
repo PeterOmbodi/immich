@@ -463,6 +463,24 @@ void main() {
 
         expect(ActionButtonType.restoreTrash.shouldShow(context), isFalse);
       });
+
+      test('should show for a trashed asset opened from a deep link', () {
+        final remoteAsset = createRemoteAsset(deletedAt: DateTime(2026, 8, 4));
+        final context = ActionButtonContext(
+          asset: remoteAsset,
+          isOwner: true,
+          isArchived: false,
+          isTrashEnabled: true,
+          isInLockedView: false,
+          currentAlbum: null,
+          advancedTroubleshooting: false,
+          isStacked: false,
+          source: ActionSource.viewer,
+          timelineOrigin: TimelineOrigin.deepLink,
+        );
+
+        expect(ActionButtonType.restoreTrash.shouldShow(context), isTrue);
+      });
     });
 
     group('delete button', () {

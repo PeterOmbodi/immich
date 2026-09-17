@@ -354,6 +354,23 @@ void main() {
     expect(container.read(viewIntentFilePathProvider), isNull);
     expect(viewIntentService.cleanedManagedTempPaths, [path]);
   });
+
+  test('opens a trashed remote asset returned by the resolver', () async {
+    final routeClosed = Completer<Object?>();
+    final trashedAsset = _remoteAsset(id: 'remote-trashed', localId: 'local-1', deletedAt: DateTime(2026, 8, 4));
+    when(() => router.push<Object?>(any())).thenAnswer((_) => routeClosed.future);
+    when(
+      () => resolver.resolve(payload),
+    ).thenAnswer((_) async => ViewIntentResolution(asset: trashedAsset, timelineService: deepLinkTimelineService));
+
+    final handling = handler.handle(payload);
+    await pumpEventQueue();
+
+    expect(container.read(assetViewerProvider).currentAsset, trashedAsset);
+
+    routeClosed.complete(null);
+    await handling;
+  });
 }
 
 AuthState _authState({required bool isAuthenticated}) {

@@ -38,6 +38,14 @@ enum TimelineOrigin {
   recentlyAdded,
 }
 
+extension BaseAssetTimelineX on BaseAsset? {
+  bool isEffectivelyTrashed(TimelineOrigin origin) {
+    final asset = this;
+    return origin == TimelineOrigin.trash ||
+        (origin == TimelineOrigin.deepLink && asset is RemoteAsset && asset.isTrashed);
+  }
+}
+
 class TimelineFactory {
   final TimelineRepository _timelineRepository;
   final SettingsRepository _settingsRepository;
