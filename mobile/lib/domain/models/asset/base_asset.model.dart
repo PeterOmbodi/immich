@@ -2,6 +2,7 @@ import 'package:immich_mobile/domain/models/exif.model.dart';
 
 part 'local_asset.model.dart';
 part 'remote_asset.model.dart';
+part 'file_backed_asset.model.dart';
 
 enum AssetType {
   // do not change this order!
@@ -11,7 +12,7 @@ enum AssetType {
   audio,
 }
 
-enum AssetState { local, remote, merged }
+enum AssetState { local, remote, merged, fileBacked }
 
 // do not change!
 // keep in sync with PlatformAssetPlaybackStyle

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' as drift;
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:immich_mobile/data/db/main/database.dart';
+import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/store.model.dart';
 import 'package:immich_mobile/domain/services/asset.service.dart';
 import 'package:immich_mobile/domain/services/store.service.dart';
@@ -12,6 +15,8 @@ import 'package:mocktail/mocktail.dart';
 
 import '../../infrastructure/repository.mock.dart';
 import '../../repository.mocks.dart';
+import '../factories/local_asset_factory.dart';
+import '../factories/remote_asset_factory.dart';
 import '../mocks.dart';
 
 void main() {
@@ -53,6 +58,52 @@ void main() {
 
   tearDown(() async {
     await Store.delete(StoreKey.manageLocalMediaAndroid);
+  });
+
+  group('AssetService.watchAsset', () {
+    test('anchors on the local id when a local asset is opened', () async {
+      final localAsset = LocalAssetFactory.create(remoteId: 'remote-1');
+      final resolved = RemoteAssetFactory.create();
+      when(
+        () => remoteRepository.watchMergedAsset(localId: localAsset.id, checksum: localAsset.checksum),
+      ).thenAnswer((_) => Stream.value(resolved));
+
+      await expectLater(sut.watchAsset(localAsset), emits(resolved));
+    });
+
+    test('anchors on the remote id when a remote asset is opened', () async {
+      final remoteAsset = RemoteAssetFactory.create(localId: 'local-1');
+      final resolved = LocalAssetFactory.create();
+      when(
+        () => remoteRepository.watchMergedAsset(remoteId: remoteAsset.id, checksum: remoteAsset.checksum),
+      ).thenAnswer((_) => Stream.value(resolved));
+
+      await expectLater(sut.watchAsset(remoteAsset), emits(resolved));
+    });
+
+    test('keeps a file-backed asset until its owned remote representation appears', () async {
+      final asset = FileBackedAsset(
+        path: '/tmp/view-intent.jpg',
+        name: 'view-intent.jpg',
+        checksum: 'file-checksum',
+        type: AssetType.image,
+        createdAt: DateTime(2026, 9, 14),
+        updatedAt: DateTime(2026, 9, 14),
+        playbackStyle: AssetPlaybackStyle.image,
+      );
+      final remote = RemoteAssetFactory.create(id: 'remote-1');
+      final updates = StreamController<RemoteAsset?>();
+      addTearDown(updates.close);
+      when(() => remoteRepository.watchOwnedRemoteByChecksum(asset.checksum)).thenAnswer((_) => updates.stream);
+
+      final expectation = expectLater(sut.watchAsset(asset), emitsInOrder([asset, remote, asset]));
+      updates
+        ..add(null)
+        ..add(remote)
+        ..add(null);
+
+      await expectation;
+    });
   });
 
   group('AssetService.updateDateTime', () {

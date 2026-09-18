@@ -68,6 +68,39 @@ class ViewerTopAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
     final lockedViewActions = <Widget>[ViewerKebabMenu(originalTheme: originalTheme)];
 
+    return ViewerTopAppBarLayout(
+      opacity: opacity,
+      showingDetails: showingDetails,
+      middle: AssetInfoTitle(asset: asset),
+      trailing: !isReadonlyModeEnabled
+          ? ImmichColorOverride(
+              color: Colors.white,
+              child: Row(mainAxisSize: MainAxisSize.min, children: isInLockedView ? lockedViewActions : actions),
+            )
+          : null,
+    );
+  }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(60.0);
+}
+
+class ViewerTopAppBarLayout extends StatelessWidget implements PreferredSizeWidget {
+  const ViewerTopAppBarLayout({
+    super.key,
+    required this.middle,
+    this.trailing,
+    this.opacity = 1,
+    this.showingDetails = false,
+  });
+
+  final Widget middle;
+  final Widget? trailing;
+  final double opacity;
+  final bool showingDetails;
+
+  @override
+  Widget build(BuildContext context) {
     return IgnorePointer(
       ignoring: opacity < 1.0,
       child: AnimatedOpacity(
@@ -99,17 +132,9 @@ class ViewerTopAppBar extends ConsumerWidget implements PreferredSizeWidget {
                   data: context.themeData.copyWith(iconTheme: const IconThemeData(size: 22, color: Colors.white)),
                   child: NavigationToolbar(
                     centerMiddle: true,
-                    leading: const _AppBarBackButton(),
-                    middle: showingDetails ? null : _AssetInfoTitle(asset: asset),
-                    trailing: !showingDetails && !isReadonlyModeEnabled
-                        ? ImmichColorOverride(
-                            color: Colors.white,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: isInLockedView ? lockedViewActions : actions,
-                            ),
-                          )
-                        : null,
+                    leading: ViewerBackButton(showingDetails: showingDetails),
+                    middle: showingDetails ? null : middle,
+                    trailing: showingDetails ? null : trailing,
                   ),
                 ),
               ),
@@ -121,34 +146,33 @@ class ViewerTopAppBar extends ConsumerWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(60.0);
+  Size get preferredSize => const Size.fromHeight(60);
 }
 
-class _AppBarBackButton extends ConsumerWidget {
-  const _AppBarBackButton();
+class ViewerBackButton extends StatelessWidget {
+  const ViewerBackButton({super.key, this.showingDetails = false});
+
+  final bool showingDetails;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final showingDetails = ref.watch(assetViewerProvider.select((state) => state.showingDetails));
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: showingDetails ? context.colorScheme.surface : Colors.transparent,
-        shape: const CircleBorder(),
-        iconSize: 22,
-        iconColor: showingDetails ? context.colorScheme.onSurface : Colors.white,
-        padding: const EdgeInsets.all(10.0),
-        elevation: showingDetails ? 4 : 0,
-      ),
-      onPressed: context.maybePop,
-      child: const Icon(Icons.arrow_back_rounded),
-    );
-  }
+  Widget build(BuildContext context) => ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: showingDetails ? context.colorScheme.surface : Colors.transparent,
+      shape: const CircleBorder(),
+      iconSize: 22,
+      iconColor: showingDetails ? context.colorScheme.onSurface : Colors.white,
+      padding: const EdgeInsets.all(10),
+      elevation: showingDetails ? 4 : 0,
+    ),
+    onPressed: context.maybePop,
+    child: const Icon(Icons.arrow_back_rounded),
+  );
 }
 
-class _AssetInfoTitle extends ConsumerWidget {
+class AssetInfoTitle extends ConsumerWidget {
   final BaseAsset asset;
 
-  const _AssetInfoTitle({required this.asset});
+  const AssetInfoTitle({super.key, required this.asset});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

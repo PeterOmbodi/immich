@@ -52,6 +52,18 @@ class ViewerKebabMenu extends ConsumerWidget {
 
     final menuChildren = ActionButtonBuilder.buildViewerKebabMenu(actionContext, context);
 
+    return ViewerOverflowMenu(originalTheme: originalTheme, menuChildren: menuChildren);
+  }
+}
+
+class ViewerOverflowMenu extends StatelessWidget {
+  const ViewerOverflowMenu({super.key, required this.menuChildren, this.originalTheme});
+
+  final List<Widget> menuChildren;
+  final ThemeData? originalTheme;
+
+  @override
+  Widget build(BuildContext context) {
     return ImmichMenu(
       consumeOutsideTap: true,
       style: MenuStyle(
