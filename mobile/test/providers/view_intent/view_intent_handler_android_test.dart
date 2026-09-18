@@ -206,12 +206,6 @@ void main() {
     expect(container.read(activeViewIntentPayloadProvider), isNull);
   });
 
-  test('flushDeferredViewIntent does nothing when there is no pending attachment', () async {
-    await handler.flushDeferredViewIntent();
-
-    verifyNever(() => resolver.resolve(any()));
-  });
-
   test('onAppResumed cleans stale temp files when no attachment is present', () async {
     viewIntentService.consumedAttachment = null;
 

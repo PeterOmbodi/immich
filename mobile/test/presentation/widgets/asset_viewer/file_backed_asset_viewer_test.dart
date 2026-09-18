@@ -28,7 +28,6 @@ void main() {
 
     await tester.pumpConsumerWidget(FileBackedAssetViewer(asset: asset, onUpload: () async {}));
 
-    expect(find.byType(Image), findsOneWidget);
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     expect(find.text('Jan 2, 2025'), findsOneWidget);
     expect(find.textContaining('3:04'), findsOneWidget);

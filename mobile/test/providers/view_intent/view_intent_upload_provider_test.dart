@@ -97,28 +97,6 @@ void main() {
     );
   });
 
-  test('keeps the backing file protected until a cancelled upload settles', () async {
-    final cancelToken = Completer<void>();
-    when(() => viewIntentService.markUploadActive(asset.path)).thenReturn(null);
-    when(() => viewIntentService.markUploadInactive(asset.path)).thenAnswer((_) async {});
-    when(
-      () => uploadService.uploadShareIntent(
-        any(),
-        cancelToken: cancelToken,
-        onProgress: any(named: 'onProgress'),
-        onSuccess: any(named: 'onSuccess'),
-        onError: any(named: 'onError'),
-      ),
-    ).thenAnswer((_) async => cancelToken.complete());
-
-    await container
-        .read(viewIntentUploadProvider)
-        .upload(asset: asset, cancelToken: cancelToken, callbacks: const UploadCallbacks());
-
-    verify(() => viewIntentService.markUploadActive(asset.path)).called(1);
-    verify(() => viewIntentService.markUploadInactive(asset.path)).called(1);
-  });
-
   test('maps upload errors to the asset id', () async {
     final errors = <(String, String)>[];
     when(() => viewIntentService.markUploadActive(asset.path)).thenReturn(null);

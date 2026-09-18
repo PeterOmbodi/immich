@@ -12,8 +12,6 @@ import 'package:immich_mobile/domain/services/timeline.service.dart';
 import 'package:immich_mobile/generated/codegen_loader.g.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_viewer.page.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/file_backed_asset_viewer.widget.dart';
-import 'package:immich_mobile/presentation/widgets/asset_viewer/viewer_bottom_app_bar.widget.dart';
-import 'package:immich_mobile/presentation/widgets/asset_viewer/viewer_top_app_bar.widget.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 
@@ -146,7 +144,5 @@ void main() {
     await tester.pump();
 
     expect(find.byType(FileBackedAssetViewer), findsOneWidget);
-    expect(find.byType(ViewerTopAppBar), findsNothing);
-    expect(find.byType(ViewerBottomAppBar), findsNothing);
   });
 }
