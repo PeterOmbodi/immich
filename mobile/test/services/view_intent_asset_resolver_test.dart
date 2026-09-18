@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -164,19 +165,28 @@ void main() {
   });
 
   test('returns a file-backed asset for a materialized path-only attachment', () async {
+    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}/incoming.webp');
+    await file.writeAsBytes([1, 2, 3]);
+    final fileTimestamp = DateTime(2026, 9, 18, 10, 30);
+    await file.setLastModified(fileTimestamp);
+
     final result = await _resolve(
       container,
-      _payload(localAssetId: null, path: '/tmp/incoming.webp', checksum: 'checksum-1', mimeType: 'image/webp'),
+      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', mimeType: 'image/webp'),
     );
 
     expect(result.asset, isA<FileBackedAsset>());
     expect(result.timelineService.origin, TimelineOrigin.deepLink);
 
     final asset = result.asset as FileBackedAsset;
-    expect(asset.path, '/tmp/incoming.webp');
+    expect(asset.path, file.path);
     expect(asset.checksum, 'checksum-1');
     expect(asset.name, 'incoming.webp');
     expect(asset.playbackStyle, AssetPlaybackStyle.imageAnimated);
+    expect(asset.createdAt, fileTimestamp);
+    expect(asset.updatedAt, fileTimestamp);
   });
 
   test('returns a viewable remote asset for a materialized path-only checksum', () async {
