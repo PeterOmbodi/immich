@@ -154,6 +154,7 @@ class ForegroundUploadService {
   Future<void> uploadShareIntent(
     List<File> files, {
     Completer<void>? cancelToken,
+    Map<String, String> originalFileNames = const {},
     void Function(String fileId, int bytes, int totalBytes)? onProgress,
     void Function(String fileId, String remoteAssetId)? onSuccess,
     void Function(String fileId, String errorMessage)? onError,
@@ -171,6 +172,7 @@ class ForegroundUploadService {
           file,
           deviceAssetId: fileId,
           cancelToken: cancelToken,
+          originalFileName: originalFileNames[file.path],
           onProgress: (bytes, totalBytes) => onProgress?.call(fileId, bytes, totalBytes),
         );
 
@@ -412,6 +414,7 @@ class ForegroundUploadService {
     File file, {
     required String deviceAssetId,
     required Completer<void>? cancelToken,
+    String? originalFileName,
     void Function(int bytes, int totalBytes)? onProgress,
   }) async {
     try {
@@ -419,7 +422,7 @@ class ForegroundUploadService {
       final stats = await file.stat();
       final fileCreatedAt = stats.changed;
       final fileModifiedAt = stats.modified;
-      final filename = p.basename(file.path);
+      final filename = originalFileName ?? p.basename(file.path);
 
       final fields = {
         // deviceAssetId/deviceId required by server v2.7.5 and below (drop in v4.0 per #27818).

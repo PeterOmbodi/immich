@@ -67,4 +67,25 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('explains when the file cannot be previewed', (tester) async {
+    final asset = FileBackedAsset(
+      path: 'C:/cache/sample.cr3',
+      checksum: 'checksum',
+      name: 'sample.cr3',
+      type: AssetType.image,
+      createdAt: DateTime(2025, 1, 2, 15, 4),
+      updatedAt: DateTime(2025, 1, 2, 15, 4),
+    );
+
+    await tester.pumpConsumerWidget(FileBackedAssetViewer(asset: asset, onUpload: () async {}));
+    final imageFinder = find.byType(Image);
+    final image = tester.widget<Image>(imageFinder);
+    final error = image.errorBuilder!(tester.element(imageFinder), StateError('unsupported image'), StackTrace.empty);
+    await tester.pumpConsumerWidget(error);
+
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
+    expect(find.text('Preview unavailable'), findsOneWidget);
+    expect(find.text('sample.cr3'), findsOneWidget);
+  });
 }

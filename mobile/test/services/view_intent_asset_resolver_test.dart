@@ -174,7 +174,13 @@ void main() {
 
     final result = await _resolve(
       container,
-      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', mimeType: 'image/webp'),
+      _payload(
+        localAssetId: null,
+        path: file.path,
+        checksum: 'checksum-1',
+        displayName: '../provider\\original.heic',
+        mimeType: 'image/webp',
+      ),
     );
 
     expect(result.asset, isA<FileBackedAsset>());
@@ -183,10 +189,49 @@ void main() {
     final asset = result.asset as FileBackedAsset;
     expect(asset.path, file.path);
     expect(asset.checksum, 'checksum-1');
-    expect(asset.name, 'incoming.webp');
+    expect(asset.name, 'original.heic');
     expect(asset.playbackStyle, AssetPlaybackStyle.imageAnimated);
     expect(asset.createdAt, fileTimestamp);
     expect(asset.updatedAt, fileTimestamp);
+  });
+
+  test('normalizes the provider display name before adding the backing extension', () async {
+    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = await File('${directory.path}/view_intent_123.jpg').writeAsBytes([1, 2, 3]);
+
+    final result = await _resolve(
+      container,
+      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', displayName: 'provider\\Screenshot.'),
+    );
+
+    expect(result.asset.name, 'Screenshot.jpg');
+  });
+
+  test('preserves dotted name suffixes that do not look like extensions', () async {
+    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = await File('${directory.path}/view_intent_123.jpg').writeAsBytes([1, 2, 3]);
+
+    final result = await _resolve(
+      container,
+      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', displayName: 'scan v1.2'),
+    );
+
+    expect(result.asset.name, 'scan v1.2.jpg');
+  });
+
+  test('keeps the provider extension when the backing file uses the default tmp suffix', () async {
+    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = await File('${directory.path}/view_intent_123.tmp').writeAsBytes([1, 2, 3]);
+
+    final result = await _resolve(
+      container,
+      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', displayName: 'photo.dng'),
+    );
+
+    expect(result.asset.name, 'photo.dng');
   });
 
   test('returns a viewable remote asset for a materialized path-only checksum', () async {
@@ -224,9 +269,16 @@ ViewIntentPayload _payload({
   String? localAssetId = 'local-1',
   String? path,
   String? checksum,
+  String? displayName,
   String mimeType = 'image/jpeg',
 }) {
-  return ViewIntentPayload(path: path, mimeType: mimeType, localAssetId: localAssetId, checksum: checksum);
+  return ViewIntentPayload(
+    path: path,
+    mimeType: mimeType,
+    localAssetId: localAssetId,
+    checksum: checksum,
+    displayName: displayName,
+  );
 }
 
 LocalAsset _localAsset({required String id, String? checksum, String? remoteId}) {

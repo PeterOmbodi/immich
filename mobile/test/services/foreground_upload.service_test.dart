@@ -197,4 +197,16 @@ void main() {
       expect(names, equals(['DJI_0001.jpg']));
     });
   });
+
+  test('uses the provided original filename for a share-intent upload', () async {
+    final directory = await Directory.systemTemp.createTemp('foreground_upload_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = await File('${directory.path}/view_intent_123.jpg').writeAsBytes([1, 2, 3]);
+    final names = captureOriginalFileNames();
+    when(() => mockStorageRepository.clearCache()).thenAnswer((_) async {});
+
+    await sut.uploadShareIntent([file], originalFileNames: {file.path: 'original.jpg'});
+
+    expect(names, ['original.jpg']);
+  });
 }

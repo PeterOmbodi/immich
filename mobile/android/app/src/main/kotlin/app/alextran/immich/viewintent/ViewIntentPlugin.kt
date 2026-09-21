@@ -27,6 +27,7 @@ private const val TAG = "ViewIntentPlugin"
 private const val HASH_BUFFER_SIZE = 64 * 1024
 
 private data class MaterializedViewIntent(val file: File, val checksum: String)
+private data class ResolvedViewIntent(val localAssetId: String?, val displayName: String?)
 
 class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentListener, ViewIntentHostApi {
   private var context: Context? = null
@@ -94,8 +95,8 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
           return@launch
         }
 
-        val localAssetId = extractLocalAssetId(context, uri, mimeType)
-        val materialized = if (localAssetId == null) {
+        val resolved = resolveViewIntent(context, uri, mimeType)
+        val materialized = if (resolved.localAssetId == null) {
           materializeUri(context, uri, mimeType) ?: run {
             callback(Result.success(null))
             return@launch
@@ -106,12 +107,14 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
         val payload = ViewIntentPayload(
           path = materialized?.file?.absolutePath,
           mimeType = mimeType,
-          localAssetId = localAssetId,
+          localAssetId = resolved.localAssetId,
           checksum = materialized?.checksum,
+          displayName = resolved.displayName.takeIf { materialized != null },
         )
         consumeViewIntent(intent)
         callback(Result.success(payload))
       } catch (e: Exception) {
+        Log.e(TAG, "Failed to consume view intent URI: $uri", e)
         callback(Result.failure(e))
       }
     }
@@ -126,10 +129,13 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
     activity?.intent = unconsumedIntent
   }
 
-  private fun extractLocalAssetId(context: Context, uri: Uri, mimeType: String): String? {
-    return tryExtractDocumentLocalAssetId(context, uri)
-      ?: tryParseContentUriId(uri)
-      ?: resolveLocalIdByNameAndSize(context, uri, mimeType)
+  private fun resolveViewIntent(context: Context, uri: Uri, mimeType: String): ResolvedViewIntent {
+    val localAssetId = tryExtractDocumentLocalAssetId(context, uri) ?: tryParseContentUriId(uri)
+    return if (localAssetId != null) {
+      ResolvedViewIntent(localAssetId, null)
+    } else {
+      resolveLocalIdByNameAndSize(context, uri, mimeType)
+    }
   }
 
   private fun tryExtractDocumentLocalAssetId(context: Context, uri: Uri): String? {
@@ -156,20 +162,25 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
       val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)?.let { ".$it" }
       tempFile = File.createTempFile("view_intent_", extension, context.cacheDir)
       val digest = MessageDigest.getInstance("SHA-1")
-      context.contentResolver.openInputStream(uri)?.use { inputStream ->
+      val inputStream = context.contentResolver.openInputStream(uri) ?: run {
+        Log.w(TAG, "Failed to open view intent URI: $uri")
+        return null
+      }
+      inputStream.use {
         FileOutputStream(tempFile).use { outputStream ->
           val buffer = ByteArray(HASH_BUFFER_SIZE)
           while (true) {
-            val bytesRead = inputStream.read(buffer)
+            val bytesRead = it.read(buffer)
             if (bytesRead == -1) break
             outputStream.write(buffer, 0, bytesRead)
             digest.update(buffer, 0, bytesRead)
           }
         }
-      } ?: return null
+      }
       completed = true
       MaterializedViewIntent(tempFile, Base64.encodeToString(digest.digest(), Base64.NO_WRAP))
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+      Log.w(TAG, "Failed to materialize view intent URI: $uri", e)
       null
     } finally {
       if (!completed) {
@@ -178,29 +189,32 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
     }
   }
 
-  private fun resolveLocalIdByNameAndSize(context: Context, uri: Uri, mimeType: String): String? {
+  private fun resolveLocalIdByNameAndSize(context: Context, uri: Uri, mimeType: String): ResolvedViewIntent {
     val metaProjection = arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
-    val (displayName, size) =
+    val metadata =
       try {
         context.contentResolver.query(uri, metaProjection, null, null, null)?.use { cursor ->
-          if (!cursor.moveToFirst()) return null
+          if (!cursor.moveToFirst()) return@use null
           val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
           val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
           val name = if (nameIdx >= 0) cursor.getString(nameIdx) else null
-          val bytes = if (sizeIdx >= 0) cursor.getLong(sizeIdx) else -1L
-          if (name.isNullOrBlank() || bytes < 0) return null
-          name to bytes
-        } ?: return null
-      } catch (_: Exception) {
-        return null
+          val bytes = if (sizeIdx >= 0 && !cursor.isNull(sizeIdx)) cursor.getLong(sizeIdx) else -1L
+          if (name.isNullOrBlank()) null else name to bytes
+        }
+      } catch (e: Exception) {
+        Log.w(TAG, "Failed to query view intent metadata: $uri", e)
+        null
       }
+    if (metadata == null) return ResolvedViewIntent(null, null)
+    val (displayName, size) = metadata
+    if (size < 0) return ResolvedViewIntent(null, displayName)
 
     val tableUri = when {
       mimeType.startsWith("image/") -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
       mimeType.startsWith("video/") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-      else -> return null
+      else -> return ResolvedViewIntent(null, displayName)
     }
-    return try {
+    val localAssetId = try {
       context.contentResolver
         .query(
           tableUri,
@@ -209,13 +223,14 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
           arrayOf(displayName, size.toString()),
           "${MediaStore.MediaColumns.DATE_MODIFIED} DESC",
         )?.use { cursor ->
-          if (!cursor.moveToFirst()) return null
+          if (!cursor.moveToFirst()) return@use null
           val idIndex = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
-          if (idIndex < 0) return null
-          cursor.getLong(idIndex).toString()
+          if (idIndex < 0) null else cursor.getLong(idIndex).toString()
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+      Log.w(TAG, "Failed to resolve local asset by view intent metadata: $uri", e)
       null
     }
+    return ResolvedViewIntent(localAssetId, displayName)
   }
 }

@@ -72,7 +72,7 @@ class FileBackedAssetViewer extends ConsumerWidget {
         ),
       ),
       body: Center(
-        child: asset.isVideo ? _FileBackedVideo(asset: asset) : _FileBackedImage(path: asset.path),
+        child: asset.isVideo ? _FileBackedVideo(asset: asset) : _FileBackedImage(asset: asset),
       ),
     );
   }
@@ -178,16 +178,49 @@ class _FileBackedAssetDetails extends StatelessWidget {
 }
 
 class _FileBackedImage extends StatelessWidget {
-  const _FileBackedImage({required this.path});
+  const _FileBackedImage({required this.asset});
 
-  final String path;
+  final FileBackedAsset asset;
 
   @override
   Widget build(BuildContext context) {
     return InteractiveViewer(
       minScale: 1,
       maxScale: 5,
-      child: Image.file(File(path), fit: BoxFit.contain, errorBuilder: (_, _, _) => const Icon(Icons.broken_image)),
+      child: Image.file(
+        File(asset.path),
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => _FilePreviewUnavailable(fileName: asset.name),
+      ),
+    );
+  }
+}
+
+class _FilePreviewUnavailable extends StatelessWidget {
+  const _FilePreviewUnavailable({required this.fileName});
+
+  final String fileName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.image_not_supported_outlined, color: Colors.white70, size: 48),
+          const SizedBox(height: 12),
+          Text(context.t.preview_unavailable, style: context.textTheme.titleMedium?.copyWith(color: Colors.white)),
+          const SizedBox(height: 4),
+          Text(
+            fileName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: context.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+          ),
+        ],
+      ),
     );
   }
 }

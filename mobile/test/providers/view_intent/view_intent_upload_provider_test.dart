@@ -50,6 +50,7 @@ void main() {
       () => uploadService.uploadShareIntent(
         any(),
         cancelToken: any(named: 'cancelToken'),
+        originalFileNames: any(named: 'originalFileNames'),
         onProgress: any(named: 'onProgress'),
         onSuccess: any(named: 'onSuccess'),
         onError: any(named: 'onError'),
@@ -72,18 +73,20 @@ void main() {
           ),
         );
 
-    final files =
-        verify(
-              () => uploadService.uploadShareIntent(
-                captureAny(),
-                cancelToken: any(named: 'cancelToken'),
-                onProgress: any(named: 'onProgress'),
-                onSuccess: any(named: 'onSuccess'),
-                onError: any(named: 'onError'),
-              ),
-            ).captured.single
-            as List<File>;
+    final captured = verify(
+      () => uploadService.uploadShareIntent(
+        captureAny(),
+        cancelToken: any(named: 'cancelToken'),
+        originalFileNames: captureAny(named: 'originalFileNames'),
+        onProgress: any(named: 'onProgress'),
+        onSuccess: any(named: 'onSuccess'),
+        onError: any(named: 'onError'),
+      ),
+    ).captured;
+    final files = captured[0] as List<File>;
+    final originalFileNames = captured[1] as Map<String, String>;
     expect(files.single.path, asset.path);
+    expect(originalFileNames, {asset.path: asset.name});
     expect(progress, [(asset.id, 5, 10)]);
     expect(succeeded, [(asset.id, 'remote-id')]);
     verify(() => viewIntentService.markUploadActive(asset.path)).called(1);
@@ -105,6 +108,7 @@ void main() {
       () => uploadService.uploadShareIntent(
         any(),
         cancelToken: any(named: 'cancelToken'),
+        originalFileNames: any(named: 'originalFileNames'),
         onProgress: any(named: 'onProgress'),
         onSuccess: any(named: 'onSuccess'),
         onError: any(named: 'onError'),
