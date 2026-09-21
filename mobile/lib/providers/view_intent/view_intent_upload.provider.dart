@@ -28,6 +28,7 @@ class ViewIntentUpload {
             [File(asset.path)],
             cancelToken: cancelToken,
             originalFileNames: {asset.path: asset.name},
+            fileDates: {asset.path: (createdAt: asset.createdAt, modifiedAt: asset.updatedAt)},
             onProgress: (_, bytes, total) => callbacks.onProgress?.call(asset.id, asset.name, bytes, total),
             onSuccess: (_, remoteId) => callbacks.onSuccess?.call(asset.id, remoteId),
             onError: (_, error) => callbacks.onError?.call(asset.id, error),

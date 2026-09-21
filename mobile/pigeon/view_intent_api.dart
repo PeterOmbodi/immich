@@ -15,8 +15,18 @@ class ViewIntentPayload {
   final String? localAssetId;
   final String? checksum;
   final String? displayName;
+  // Milliseconds since Unix epoch, when supplied by a document provider.
+  // Generic content providers do not expose a standard last-modified column.
+  final int? sourceModifiedAt;
 
-  const ViewIntentPayload({this.path, required this.mimeType, this.localAssetId, this.checksum, this.displayName});
+  const ViewIntentPayload({
+    this.path,
+    required this.mimeType,
+    this.localAssetId,
+    this.checksum,
+    this.displayName,
+    this.sourceModifiedAt,
+  });
 }
 
 @HostApi()

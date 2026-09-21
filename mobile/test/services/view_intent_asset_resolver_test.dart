@@ -169,8 +169,9 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final file = File('${directory.path}/incoming.webp');
     await file.writeAsBytes([1, 2, 3]);
-    final fileTimestamp = DateTime(2026, 9, 18, 10, 30);
-    await file.setLastModified(fileTimestamp);
+    final materializedTimestamp = DateTime(2026, 9, 18, 10, 30);
+    final sourceTimestamp = DateTime(2025, 4, 12, 8, 15);
+    await file.setLastModified(materializedTimestamp);
 
     final result = await _resolve(
       container,
@@ -180,6 +181,7 @@ void main() {
         checksum: 'checksum-1',
         displayName: '../provider\\original.heic',
         mimeType: 'image/webp',
+        sourceModifiedAt: sourceTimestamp.millisecondsSinceEpoch,
       ),
     );
 
@@ -191,8 +193,24 @@ void main() {
     expect(asset.checksum, 'checksum-1');
     expect(asset.name, 'original.heic');
     expect(asset.playbackStyle, AssetPlaybackStyle.imageAnimated);
-    expect(asset.createdAt, fileTimestamp);
-    expect(asset.updatedAt, fileTimestamp);
+    expect(asset.createdAt, sourceTimestamp);
+    expect(asset.updatedAt, sourceTimestamp);
+  });
+
+  test('treats a non-positive source timestamp as unavailable', () async {
+    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = await File('${directory.path}/incoming.jpg').writeAsBytes([1, 2, 3]);
+    final beforeResolution = DateTime.now();
+
+    final result = await _resolve(
+      container,
+      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', sourceModifiedAt: 0),
+    );
+    final afterResolution = DateTime.now();
+
+    expect(result.asset.createdAt.isBefore(beforeResolution), isFalse);
+    expect(result.asset.createdAt.isAfter(afterResolution), isFalse);
   });
 
   test('normalizes the provider display name before adding the backing extension', () async {
@@ -270,6 +288,7 @@ ViewIntentPayload _payload({
   String? path,
   String? checksum,
   String? displayName,
+  int? sourceModifiedAt,
   String mimeType = 'image/jpeg',
 }) {
   return ViewIntentPayload(
@@ -278,6 +297,7 @@ ViewIntentPayload _payload({
     localAssetId: localAssetId,
     checksum: checksum,
     displayName: displayName,
+    sourceModifiedAt: sourceModifiedAt,
   );
 }
 

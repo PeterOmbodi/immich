@@ -51,6 +51,7 @@ void main() {
         any(),
         cancelToken: any(named: 'cancelToken'),
         originalFileNames: any(named: 'originalFileNames'),
+        fileDates: any(named: 'fileDates'),
         onProgress: any(named: 'onProgress'),
         onSuccess: any(named: 'onSuccess'),
         onError: any(named: 'onError'),
@@ -78,6 +79,7 @@ void main() {
         captureAny(),
         cancelToken: any(named: 'cancelToken'),
         originalFileNames: captureAny(named: 'originalFileNames'),
+        fileDates: captureAny(named: 'fileDates'),
         onProgress: any(named: 'onProgress'),
         onSuccess: any(named: 'onSuccess'),
         onError: any(named: 'onError'),
@@ -85,8 +87,10 @@ void main() {
     ).captured;
     final files = captured[0] as List<File>;
     final originalFileNames = captured[1] as Map<String, String>;
+    final fileDates = captured[2] as Map<String, ({DateTime createdAt, DateTime modifiedAt})>;
     expect(files.single.path, asset.path);
     expect(originalFileNames, {asset.path: asset.name});
+    expect(fileDates, {asset.path: (createdAt: asset.createdAt, modifiedAt: asset.updatedAt)});
     expect(progress, [(asset.id, 5, 10)]);
     expect(succeeded, [(asset.id, 'remote-id')]);
     verify(() => viewIntentService.markUploadActive(asset.path)).called(1);
@@ -109,6 +113,7 @@ void main() {
         any(),
         cancelToken: any(named: 'cancelToken'),
         originalFileNames: any(named: 'originalFileNames'),
+        fileDates: any(named: 'fileDates'),
         onProgress: any(named: 'onProgress'),
         onSuccess: any(named: 'onSuccess'),
         onError: any(named: 'onError'),

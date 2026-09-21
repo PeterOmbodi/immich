@@ -27,7 +27,16 @@ private const val TAG = "ViewIntentPlugin"
 private const val HASH_BUFFER_SIZE = 64 * 1024
 
 private data class MaterializedViewIntent(val file: File, val checksum: String)
-private data class ResolvedViewIntent(val localAssetId: String?, val displayName: String?)
+private data class ResolvedViewIntent(
+  val localAssetId: String?,
+  val displayName: String?,
+  val sourceModifiedAt: Long?,
+)
+private data class ViewIntentMetadata(
+  val displayName: String?,
+  val size: Long,
+  val sourceModifiedAt: Long?,
+)
 
 class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentListener, ViewIntentHostApi {
   private var context: Context? = null
@@ -110,6 +119,7 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
           localAssetId = resolved.localAssetId,
           checksum = materialized?.checksum,
           displayName = resolved.displayName.takeIf { materialized != null },
+          sourceModifiedAt = resolved.sourceModifiedAt.takeIf { materialized != null },
         )
         consumeViewIntent(intent)
         callback(Result.success(payload))
@@ -130,17 +140,27 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
   }
 
   private fun resolveViewIntent(context: Context, uri: Uri, mimeType: String): ResolvedViewIntent {
-    val localAssetId = tryExtractDocumentLocalAssetId(context, uri) ?: tryParseContentUriId(uri)
+    val isDocumentUri = tryIsDocumentUri(context, uri)
+    val localAssetId = tryExtractDocumentLocalAssetId(uri, isDocumentUri) ?: tryParseContentUriId(uri)
     return if (localAssetId != null) {
-      ResolvedViewIntent(localAssetId, null)
+      ResolvedViewIntent(localAssetId, null, null)
     } else {
-      resolveLocalIdByNameAndSize(context, uri, mimeType)
+      resolveLocalIdByNameAndSize(context, uri, mimeType, isDocumentUri)
     }
   }
 
-  private fun tryExtractDocumentLocalAssetId(context: Context, uri: Uri): String? {
+  private fun tryIsDocumentUri(context: Context, uri: Uri): Boolean {
     return try {
-      if (!DocumentsContract.isDocumentUri(context, uri)) return null
+      DocumentsContract.isDocumentUri(context, uri)
+    } catch (e: Exception) {
+      Log.w(TAG, "Failed to identify document URI: $uri", e)
+      false
+    }
+  }
+
+  private fun tryExtractDocumentLocalAssetId(uri: Uri, isDocumentUri: Boolean): String? {
+    return try {
+      if (!isDocumentUri) return null
       val docId = DocumentsContract.getDocumentId(uri)
       if (docId.isBlank() || docId.startsWith("raw:")) return null
       docId.substringAfter(':', docId).toLongOrNull()?.toString()
@@ -189,30 +209,42 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
     }
   }
 
-  private fun resolveLocalIdByNameAndSize(context: Context, uri: Uri, mimeType: String): ResolvedViewIntent {
-    val metaProjection = arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+  private fun resolveLocalIdByNameAndSize(
+    context: Context,
+    uri: Uri,
+    mimeType: String,
+    isDocumentUri: Boolean,
+  ): ResolvedViewIntent {
+    val metaProjection =
+      mutableListOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+        .apply {
+          if (isDocumentUri) add(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+        }.toTypedArray()
     val metadata =
       try {
         context.contentResolver.query(uri, metaProjection, null, null, null)?.use { cursor ->
           if (!cursor.moveToFirst()) return@use null
           val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
           val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
+          val modifiedIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
           val name = if (nameIdx >= 0) cursor.getString(nameIdx) else null
           val bytes = if (sizeIdx >= 0 && !cursor.isNull(sizeIdx)) cursor.getLong(sizeIdx) else -1L
-          if (name.isNullOrBlank()) null else name to bytes
+          val sourceModifiedAt =
+            if (modifiedIdx >= 0 && !cursor.isNull(modifiedIdx)) cursor.getLong(modifiedIdx) else null
+          ViewIntentMetadata(name?.takeUnless { it.isBlank() }, bytes, sourceModifiedAt)
         }
       } catch (e: Exception) {
         Log.w(TAG, "Failed to query view intent metadata: $uri", e)
         null
       }
-    if (metadata == null) return ResolvedViewIntent(null, null)
-    val (displayName, size) = metadata
-    if (size < 0) return ResolvedViewIntent(null, displayName)
+    if (metadata == null) return ResolvedViewIntent(null, null, null)
+    val (displayName, size, sourceModifiedAt) = metadata
+    if (displayName == null || size < 0) return ResolvedViewIntent(null, displayName, sourceModifiedAt)
 
     val tableUri = when {
       mimeType.startsWith("image/") -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
       mimeType.startsWith("video/") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-      else -> return ResolvedViewIntent(null, displayName)
+      else -> return ResolvedViewIntent(null, displayName, sourceModifiedAt)
     }
     val localAssetId = try {
       context.contentResolver
@@ -231,6 +263,6 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
       Log.w(TAG, "Failed to resolve local asset by view intent metadata: $uri", e)
       null
     }
-    return ResolvedViewIntent(localAssetId, displayName)
+    return ResolvedViewIntent(localAssetId, displayName, sourceModifiedAt)
   }
 }

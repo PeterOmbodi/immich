@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/services/asset.service.dart';
@@ -80,7 +78,7 @@ class ViewIntentAssetResolver {
     } else if (localAssetId != null) {
       asset = _toTransientLocalAsset(attachment, localAssetId, resolvedLocal.checksum);
     } else {
-      asset = await _toFileBackedAsset(attachment);
+      asset = _toFileBackedAsset(attachment);
     }
 
     return ViewIntentResolution(asset: asset, timelineService: _timelineFor(asset));
@@ -165,14 +163,16 @@ class ViewIntentAssetResolver {
     );
   }
 
-  Future<FileBackedAsset> _toFileBackedAsset(ViewIntentPayload attachment) async {
+  FileBackedAsset _toFileBackedAsset(ViewIntentPayload attachment) {
     final path = attachment.path;
     final checksum = attachment.checksum;
     if (path == null || checksum == null) {
       throw StateError('A materialized view intent requires both a path and checksum.');
     }
-    // ignore: avoid_slow_async_io
-    final modifiedAt = await File(path).lastModified();
+    final sourceModifiedAt = attachment.sourceModifiedAt ?? 0;
+    final modifiedAt = sourceModifiedAt <= 0
+        ? DateTime.now()
+        : DateTime.fromMillisecondsSinceEpoch(sourceModifiedAt);
     return FileBackedAsset(
       path: path,
       name: attachment.fileName,
