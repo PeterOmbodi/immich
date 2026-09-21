@@ -114,7 +114,9 @@ void main() {
     );
   });
 
-  testWidgets('uses the dedicated presentation for a file-backed asset', (tester) async {
+  testWidgets('uses the dedicated presentation with light system icons for a file-backed asset', (tester) async {
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+
     await tester.pumpWidget(
       EasyLocalization(
         supportedLocales: locales.values.toList(),
@@ -144,5 +146,6 @@ void main() {
     await tester.pump();
 
     expect(find.byType(FileBackedAssetViewer), findsOneWidget);
+    expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.light);
   });
 }

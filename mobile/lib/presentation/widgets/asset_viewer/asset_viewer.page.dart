@@ -330,7 +330,10 @@ class _AssetViewerState extends ConsumerState<AssetViewer> {
   Widget build(BuildContext context) {
     final currentAsset = ref.watch(assetViewerProvider.select((s) => s.currentAsset));
     if (currentAsset case final FileBackedAsset asset) {
-      return FileBackedAssetViewer(asset: asset);
+      return AnnotatedRegion(
+        value: _viewerOverlayStyle,
+        child: FileBackedAssetViewer(asset: asset),
+      );
     }
 
     final showingControls = ref.watch(assetViewerProvider.select((s) => s.showingControls));
