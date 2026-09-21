@@ -21,6 +21,7 @@ import 'package:immich_mobile/providers/view_intent/view_intent_upload.provider.
 import 'package:immich_mobile/services/foreground_upload.service.dart';
 import 'package:immich_mobile/utils/error_handler.dart';
 import 'package:immich_mobile/utils/timezone.dart';
+import 'package:immich_mobile/widgets/asset_viewer/video_controls.dart';
 import 'package:immich_ui/immich_ui.dart';
 
 class FileBackedAssetViewer extends ConsumerWidget {
@@ -57,18 +58,24 @@ class FileBackedAssetViewer extends ConsumerWidget {
         ),
       ),
       bottomNavigationBar: ViewerBottomBarLayout(
-        child: ImmichColorOverride(
-          color: Colors.white,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ImmichColumnButton(
-                icon: Icons.backup_outlined,
-                label: context.t.upload,
-                onPressed: () => (onUpload ?? () => _upload(context, ref))(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (asset.isVideo) VideoControls(videoPlayerName: asset.id),
+            ImmichColorOverride(
+              color: Colors.white,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ImmichColumnButton(
+                    icon: Icons.backup_outlined,
+                    label: context.t.upload,
+                    onPressed: () => (onUpload ?? () => _upload(context, ref))(),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       body: Center(

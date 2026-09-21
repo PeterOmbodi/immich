@@ -201,6 +201,7 @@ ImageProvider? getThumbnailImageProvider(
   Size? remoteSize,
   bool edited = true,
 }) {
+  assert(asset is! FileBackedAsset, 'FileBackedAsset renders from its own path, not through a thumbnail provider');
   if (_shouldUseLocalAsset(asset)) {
     final id = asset is LocalAsset ? asset.id : (asset as RemoteAsset).localId!;
     return LocalThumbProvider(id: id, size: size, assetType: asset.type, checksum: asset.checksum);
