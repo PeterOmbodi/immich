@@ -214,39 +214,32 @@ void main() {
   });
 
   test('normalizes the provider display name before adding the backing extension', () async {
-    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
-    addTearDown(() => directory.delete(recursive: true));
-    final file = await File('${directory.path}/view_intent_123.jpg').writeAsBytes([1, 2, 3]);
-
     final result = await _resolve(
       container,
-      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', displayName: 'provider\\Screenshot.'),
+      _payload(
+        localAssetId: null,
+        path: '/tmp/view_intent_123.jpg',
+        checksum: 'checksum-1',
+        displayName: 'provider\\Screenshot.',
+      ),
     );
 
     expect(result.asset.name, 'Screenshot.jpg');
   });
 
   test('preserves dotted name suffixes that do not look like extensions', () async {
-    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
-    addTearDown(() => directory.delete(recursive: true));
-    final file = await File('${directory.path}/view_intent_123.jpg').writeAsBytes([1, 2, 3]);
-
     final result = await _resolve(
       container,
-      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', displayName: 'scan v1.2'),
+      _payload(localAssetId: null, path: '/tmp/view_intent_123.jpg', checksum: 'checksum-1', displayName: 'scan v1.2'),
     );
 
     expect(result.asset.name, 'scan v1.2.jpg');
   });
 
   test('keeps the provider extension when the backing file uses the default tmp suffix', () async {
-    final directory = await Directory.systemTemp.createTemp('view_intent_resolver_test_');
-    addTearDown(() => directory.delete(recursive: true));
-    final file = await File('${directory.path}/view_intent_123.tmp').writeAsBytes([1, 2, 3]);
-
     final result = await _resolve(
       container,
-      _payload(localAssetId: null, path: file.path, checksum: 'checksum-1', displayName: 'photo.dng'),
+      _payload(localAssetId: null, path: '/tmp/view_intent_123.tmp', checksum: 'checksum-1', displayName: 'photo.dng'),
     );
 
     expect(result.asset.name, 'photo.dng');

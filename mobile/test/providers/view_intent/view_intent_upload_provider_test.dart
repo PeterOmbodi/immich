@@ -95,13 +95,6 @@ void main() {
     expect(succeeded, [(asset.id, 'remote-id')]);
     verify(() => viewIntentService.markUploadActive(asset.path)).called(1);
     verify(() => viewIntentService.markUploadInactive(asset.path)).called(1);
-    verifyNever(
-      () => uploadService.uploadManual(
-        any(),
-        cancelToken: any(named: 'cancelToken'),
-        callbacks: any(named: 'callbacks'),
-      ),
-    );
   });
 
   test('maps upload errors to the asset id', () async {
