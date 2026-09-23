@@ -329,6 +329,14 @@ class _AssetViewerState extends ConsumerState<AssetViewer> {
   @override
   Widget build(BuildContext context) {
     final currentAsset = ref.watch(assetViewerProvider.select((s) => s.currentAsset));
+    final showingControls = ref.watch(assetViewerProvider.select((s) => s.showingControls));
+    final showingDetails = ref.watch(assetViewerProvider.select((s) => s.showingDetails));
+
+    ref.listen(assetViewerProvider.select((value) => (value.showingControls, value.showingDetails)), (_, state) {
+      final (controls, details) = state;
+      unawaited(_setSystemUIMode(controls, details));
+    });
+
     if (currentAsset case final FileBackedAsset asset) {
       return AnnotatedRegion(
         value: _viewerOverlayStyle,
@@ -336,8 +344,6 @@ class _AssetViewerState extends ConsumerState<AssetViewer> {
       );
     }
 
-    final showingControls = ref.watch(assetViewerProvider.select((s) => s.showingControls));
-    final showingDetails = ref.watch(assetViewerProvider.select((s) => s.showingDetails));
     final isZoomed = ref.watch(assetViewerProvider.select((s) => s.isZoomed));
     final backgroundColor = showingDetails
         ? context.colorScheme.surface
@@ -351,11 +357,6 @@ class _AssetViewerState extends ConsumerState<AssetViewer> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleCasting();
       });
-    });
-
-    ref.listen(assetViewerProvider.select((value) => (value.showingControls, value.showingDetails)), (_, state) {
-      final (controls, details) = state;
-      unawaited(_setSystemUIMode(controls, details));
     });
 
     return AnnotatedRegion(

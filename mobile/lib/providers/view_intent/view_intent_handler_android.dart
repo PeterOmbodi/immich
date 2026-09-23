@@ -114,7 +114,7 @@ class AndroidViewIntentHandler {
   }) async {
     final notifier = _ref.read(assetViewerProvider.notifier);
     notifier.reset();
-    if (asset.isVideo) {
+    if (asset.isVideo && asset is! FileBackedAsset) {
       notifier.setControls(false);
     }
     notifier.setAsset(asset);

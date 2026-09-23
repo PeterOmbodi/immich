@@ -15,6 +15,7 @@ import 'package:immich_mobile/presentation/widgets/asset_viewer/sheet_tile.widge
 import 'package:immich_mobile/presentation/widgets/asset_viewer/video_viewer.widget.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/viewer_kebab_menu.widget.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/viewer_top_app_bar.widget.dart';
+import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/backup/asset_upload_progress.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/toast.provider.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_upload.provider.dart';
@@ -33,12 +34,15 @@ class FileBackedAssetViewer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final originalTheme = context.themeData;
+    final showingControls = ref.watch(assetViewerProvider.select((state) => state.showingControls));
+    final controlsOpacity = showingControls ? 1.0 : 0.0;
 
     return Scaffold(
       backgroundColor: Colors.black,
       extendBody: true,
       extendBodyBehindAppBar: true,
       appBar: ViewerTopAppBarLayout(
+        opacity: controlsOpacity,
         middle: AssetInfoTitle(asset: asset),
         trailing: ImmichColorOverride(
           color: Colors.white,
@@ -57,29 +61,40 @@ class FileBackedAssetViewer extends ConsumerWidget {
           ),
         ),
       ),
-      bottomNavigationBar: ViewerBottomBarLayout(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (asset.isVideo) VideoControls(videoPlayerName: asset.id),
-            ImmichColorOverride(
-              color: Colors.white,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ImmichColumnButton(
-                    icon: Icons.backup_outlined,
-                    label: context.t.upload,
-                    onPressed: () => (onUpload ?? () => _upload(context, ref))(),
+      bottomNavigationBar: IgnorePointer(
+        ignoring: !showingControls,
+        child: AnimatedOpacity(
+          opacity: controlsOpacity,
+          duration: Durations.short2,
+          child: ViewerBottomBarLayout(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (asset.isVideo) VideoControls(videoPlayerName: asset.id),
+                ImmichColorOverride(
+                  color: Colors.white,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ImmichColumnButton(
+                        icon: Icons.backup_outlined,
+                        label: context.t.upload,
+                        onPressed: () => (onUpload ?? () => _upload(context, ref))(),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
-      body: Center(
-        child: asset.isVideo ? _FileBackedVideo(asset: asset) : _FileBackedImage(asset: asset),
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: ref.read(assetViewerProvider.notifier).toggleControls,
+        child: Center(
+          child: asset.isVideo ? _FileBackedVideo(asset: asset) : _FileBackedImage(asset: asset),
+        ),
       ),
     );
   }
