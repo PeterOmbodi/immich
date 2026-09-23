@@ -183,6 +183,7 @@ class _ThumbnailTileState extends ConsumerState<ThumbnailTile> {
                           child: _TileOverlayIcon(Icons.cloud_done_outlined),
                         ),
                       ),
+                      AssetState.fileBacked => const SizedBox.shrink(),
                     },
                   ),
 

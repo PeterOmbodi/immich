@@ -22,7 +22,6 @@ import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart'
 import 'package:immich_mobile/providers/asset_viewer/is_motion_video_playing.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/settings.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
-import 'package:immich_mobile/providers/view_intent/view_intent_file_path.provider.dart';
 import 'package:immich_mobile/widgets/common/immich_loading_indicator.dart';
 import 'package:immich_mobile/widgets/photo_view/photo_view.dart';
 
@@ -332,16 +331,10 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     required PhotoViewHeroAttributes? heroAttributes,
     required bool isCurrent,
     required bool isPlayingMotionVideo,
-    required String? localFilePath,
     required Size? remoteThumbnailSize,
   }) {
     final size = context.sizeData;
-    final imageProvider = getFullImageProvider(
-      asset,
-      size: size,
-      localFilePath: localFilePath,
-      remoteThumbnailSize: remoteThumbnailSize,
-    );
+    final imageProvider = getFullImageProvider(asset, size: size, remoteThumbnailSize: remoteThumbnailSize);
 
     if (asset.isImage && !isPlayingMotionVideo) {
       return PhotoView(
@@ -394,7 +387,6 @@ class _AssetPageState extends ConsumerState<AssetPage> {
       child: NativeVideoViewer(
         key: _NativeVideoViewerKey(asset.heroTag),
         asset: asset,
-        localFilePath: localFilePath,
         isCurrent: isCurrent,
         image: Image(image: imageProvider, fit: BoxFit.contain, alignment: Alignment.center),
       ),
@@ -440,8 +432,6 @@ class _AssetPageState extends ConsumerState<AssetPage> {
       _scrollController.snapPosition.snapOffset = _snapOffset;
     }
 
-    final viewIntentFilePath = timelineOrigin == TimelineOrigin.deepLink ? ref.watch(viewIntentFilePathProvider) : null;
-
     return Stack(
       children: [
         SingleChildScrollView(
@@ -461,7 +451,6 @@ class _AssetPageState extends ConsumerState<AssetPage> {
                         : null,
                     isCurrent: isCurrent,
                     isPlayingMotionVideo: isPlayingMotionVideo,
-                    localFilePath: viewIntentFilePath,
                     remoteThumbnailSize: thumbnailSize,
                   ),
                 ),

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:async/async.dart';
@@ -154,14 +153,11 @@ ImageProvider getFullImageProvider(
   BaseAsset asset, {
   Size size = const Size(1080, 1920),
   bool edited = true,
-  String? localFilePath,
   Size? remoteThumbnailSize,
 }) {
   // Create new provider and cache it
   final ImageProvider provider;
-  if (localFilePath != null) {
-    provider = FileImage(File(localFilePath));
-  } else if (_shouldUseLocalAsset(asset)) {
+  if (_shouldUseLocalAsset(asset)) {
     final id = asset is LocalAsset ? asset.id : (asset as RemoteAsset).localId!;
     provider = LocalFullImageProvider(
       id: id,
@@ -205,6 +201,7 @@ ImageProvider? getThumbnailImageProvider(
   Size? remoteSize,
   bool edited = true,
 }) {
+  assert(asset is! FileBackedAsset, 'FileBackedAsset renders from its own path, not through a thumbnail provider');
   if (_shouldUseLocalAsset(asset)) {
     final id = asset is LocalAsset ? asset.id : (asset as RemoteAsset).localId!;
     return LocalThumbProvider(id: id, size: size, assetType: asset.type, checksum: asset.checksum);

@@ -16,9 +16,8 @@ import 'package:logging/logging.dart';
 class ViewIntentResolution {
   final BaseAsset asset;
   final TimelineService timelineService;
-  final String? viewIntentFilePath;
 
-  const ViewIntentResolution({required this.asset, required this.timelineService, this.viewIntentFilePath});
+  const ViewIntentResolution({required this.asset, required this.timelineService});
 }
 
 final viewIntentAssetResolverProvider = Provider<ViewIntentAssetResolver>(
@@ -59,26 +58,30 @@ class ViewIntentAssetResolver {
       throw StateError('ViewIntent resolution requires either a localAssetId or a materialized file path.');
     }
 
-    ({LocalAsset? asset, String? checksum}) resolvedLocal = (asset: null, checksum: null);
+    ({LocalAsset? asset, String? checksum}) resolvedLocal = (asset: null, checksum: attachment.checksum);
     if (localAssetId != null) {
       resolvedLocal = await _resolveLocalAsset(localAssetId);
-      final remoteAsset = await _resolveRemoteAsset(
-        localAssetId,
-        remoteAssetId: resolvedLocal.asset?.remoteId,
-        checksum: resolvedLocal.checksum,
-      );
-      if (remoteAsset != null) {
-        return ViewIntentResolution(asset: remoteAsset, timelineService: _timelineFor(remoteAsset));
-      }
     }
 
-    final asset = resolvedLocal.asset ?? _toTransientAsset(attachment, resolvedLocal.checksum);
-
-    return ViewIntentResolution(
-      asset: asset,
-      timelineService: _timelineFor(asset),
-      viewIntentFilePath: resolvedLocal.asset == null ? path : null,
+    final remoteAsset = await _resolveRemoteAsset(
+      localAssetId,
+      remoteAssetId: resolvedLocal.asset?.remoteId,
+      checksum: resolvedLocal.checksum,
     );
+    if (remoteAsset != null) {
+      return ViewIntentResolution(asset: remoteAsset, timelineService: _timelineFor(remoteAsset));
+    }
+
+    final BaseAsset asset;
+    if (resolvedLocal.asset case final localAsset?) {
+      asset = localAsset;
+    } else if (localAssetId != null) {
+      asset = _toTransientLocalAsset(attachment, localAssetId, resolvedLocal.checksum);
+    } else {
+      asset = _toFileBackedAsset(attachment);
+    }
+
+    return ViewIntentResolution(asset: asset, timelineService: _timelineFor(asset));
   }
 
   TimelineService _timelineFor(BaseAsset asset) => _timelineFactory.fromAssets([asset], TimelineOrigin.deepLink);
@@ -120,7 +123,7 @@ class ViewIntentAssetResolver {
   }
 
   Future<RemoteAsset?> _resolveRemoteAsset(
-    String localAssetId, {
+    String? localAssetId, {
     required String? remoteAssetId,
     required String? checksum,
   }) async {
@@ -143,21 +146,40 @@ class ViewIntentAssetResolver {
     if (remoteAsset == null || remoteAsset.isTrashed) {
       return null;
     }
-    final asset = remoteAsset.copyWith(localId: localAssetId);
-    return asset;
+    return localAssetId == null ? remoteAsset : remoteAsset.copyWith(localId: localAssetId);
   }
 
-  LocalAsset _toTransientAsset(ViewIntentPayload attachment, String? checksum) {
+  LocalAsset _toTransientLocalAsset(ViewIntentPayload attachment, String localAssetId, String? checksum) {
     final now = DateTime.now();
-    // A FileBackedAsset could model the path more explicitly, but would require broader changes to the asset hierarchy.
     return LocalAsset(
-      id: attachment.localAssetId ?? '-${attachment.path!.hashCode.abs()}',
+      id: localAssetId,
       name: attachment.fileName,
       checksum: checksum,
       type: attachment.isVideo ? AssetType.video : AssetType.image,
       createdAt: now,
       updatedAt: now,
       isEdited: false,
+      playbackStyle: attachment.playbackStyle,
+    );
+  }
+
+  FileBackedAsset _toFileBackedAsset(ViewIntentPayload attachment) {
+    final path = attachment.path;
+    final checksum = attachment.checksum;
+    if (path == null || checksum == null) {
+      throw StateError('A materialized view intent requires both a path and checksum.');
+    }
+    final sourceModifiedAt = attachment.sourceModifiedAt ?? 0;
+    final modifiedAt = sourceModifiedAt <= 0
+        ? DateTime.now()
+        : DateTime.fromMillisecondsSinceEpoch(sourceModifiedAt);
+    return FileBackedAsset(
+      path: path,
+      name: attachment.fileName,
+      checksum: checksum,
+      type: attachment.isVideo ? AssetType.video : AssetType.image,
+      createdAt: modifiedAt,
+      updatedAt: modifiedAt,
       playbackStyle: attachment.playbackStyle,
     );
   }

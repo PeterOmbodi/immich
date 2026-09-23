@@ -20,7 +20,6 @@ import 'package:native_video_player/native_video_player.dart';
 
 class NativeVideoViewer extends ConsumerStatefulWidget {
   final BaseAsset asset;
-  final String? localFilePath;
   final bool isCurrent;
   final bool showControls;
   final Widget image;
@@ -31,7 +30,6 @@ class NativeVideoViewer extends ConsumerStatefulWidget {
   const NativeVideoViewer({
     super.key,
     required this.asset,
-    this.localFilePath,
     required this.image,
     this.isCurrent = false,
     this.showControls = true,
@@ -107,15 +105,9 @@ class _NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widg
       return null;
     }
 
-    final videoAsset = await ref.read(assetServiceProvider).getAsset(widget.asset) ?? widget.asset;
-    if (!mounted) {
-      return null;
-    }
-
     try {
-      final localFilePath = widget.localFilePath;
-      if (localFilePath != null) {
-        final file = File(localFilePath);
+      if (widget.asset case FileBackedAsset(:final path)) {
+        final file = File(path);
         // ignore: avoid_slow_async_io
         if (!await file.exists()) {
           throw Exception('No file found for the video');
@@ -125,6 +117,11 @@ class _NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widg
           path: CurrentPlatform.isAndroid ? file.uri.toString() : file.path,
           type: VideoSourceType.file,
         );
+      }
+
+      final videoAsset = await ref.read(assetServiceProvider).getAsset(widget.asset) ?? widget.asset;
+      if (!mounted) {
+        return null;
       }
 
       // Attempt to retrieve LocalAsset, falling back to remote if it cannot be found
@@ -169,7 +166,7 @@ class _NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widg
         headers: ApiService.getRequestHeaders(),
       );
     } catch (error) {
-      _log.severe('Error creating video source for asset ${videoAsset.name}: $error');
+      _log.severe('Error creating video source for asset ${widget.asset.name}: $error');
       return null;
     }
   }

@@ -197,4 +197,39 @@ void main() {
       expect(names, equals(['DJI_0001.jpg']));
     });
   });
+
+  test('uses provided file metadata for a share-intent upload', () async {
+    final directory = await Directory.systemTemp.createTemp('foreground_upload_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = await File('${directory.path}/view_intent_123.jpg').writeAsBytes([1, 2, 3]);
+    final sourceCreatedAt = DateTime.utc(2024, 3, 2, 10, 15);
+    final sourceModifiedAt = DateTime.utc(2024, 3, 2, 11, 30);
+    final names = <String>[];
+    final fields = <Map<String, String>>[];
+    when(
+      () => mockUploadRepository.uploadFile(
+        file: any(named: 'file'),
+        originalFileName: any(named: 'originalFileName'),
+        fields: any(named: 'fields'),
+        cancelToken: any(named: 'cancelToken'),
+        onProgress: any(named: 'onProgress'),
+        logContext: any(named: 'logContext'),
+      ),
+    ).thenAnswer((invocation) async {
+      names.add(invocation.namedArguments[#originalFileName] as String);
+      fields.add(Map.of(invocation.namedArguments[#fields] as Map<String, String>));
+      return UploadResult.success(remoteAssetId: 'remote-1');
+    });
+    when(() => mockStorageRepository.clearCache()).thenAnswer((_) async {});
+
+    await sut.uploadShareIntent(
+      [file],
+      originalFileNames: {file.path: 'original.jpg'},
+      fileDates: {file.path: (createdAt: sourceCreatedAt, modifiedAt: sourceModifiedAt)},
+    );
+
+    expect(names, ['original.jpg']);
+    expect(fields.single['fileCreatedAt'], '2024-03-02T10:15:00.000Z');
+    expect(fields.single['fileModifiedAt'], '2024-03-02T11:30:00.000Z');
+  });
 }
