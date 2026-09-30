@@ -86,7 +86,7 @@ class ViewIntentAssetResolver {
     }
 
     if (own.isTrashed) {
-      return localAsset == null ? candidates.timelineVisible : null;
+      return own;
     }
 
     if (localAsset != null) {
@@ -119,34 +119,6 @@ class ViewIntentAssetResolver {
       _logger.warning('Failed to hash view intent local asset $localAssetId', error, stackTrace);
       return null;
     }
-  }
-
-  Future<RemoteAsset?> _resolveRemoteAsset(
-    String localAssetId, {
-    required String? remoteAssetId,
-    required String? checksum,
-  }) async {
-    RemoteAsset? remoteAsset;
-    if (remoteAssetId != null) {
-      remoteAsset = await _assetService.getRemoteAsset(remoteAssetId);
-      if (remoteAsset != null) {
-        _logger.fine('resolve matched remote asset by id: $remoteAssetId, asset=$remoteAsset');
-      }
-    }
-
-    if (remoteAsset == null && checksum != null) {
-      final candidates = await timelineRepository.getViewableRemoteAssetsByChecksum(await timelineUsers(), checksum);
-      if (candidates.isNotEmpty) {
-        remoteAsset = candidates.first;
-        _logger.fine('resolve matched remote asset by checksum: $checksum, asset=$remoteAsset');
-      }
-    }
-
-    if (remoteAsset == null) {
-      return null;
-    }
-    final asset = remoteAsset.copyWith(localId: localAssetId);
-    return asset;
   }
 
   LocalAsset _toTransientAsset(ViewIntentPayload attachment, String? checksum) {

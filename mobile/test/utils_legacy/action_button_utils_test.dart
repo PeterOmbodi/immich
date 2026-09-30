@@ -448,7 +448,6 @@ void main() {
           asset: remoteAsset,
           isOwner: true,
           isArchived: false,
-          isTrashEnabled: true,
           isInLockedView: false,
           currentAlbum: null,
           advancedTroubleshooting: false,

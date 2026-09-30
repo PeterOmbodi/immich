@@ -397,7 +397,7 @@ LocalAsset _localAsset({required String id, String? checksum = 'checksum-1', Str
   );
 }
 
-RemoteAsset _remoteAsset({required String id, required String? localId}) {
+RemoteAsset _remoteAsset({required String id, required String? localId, DateTime? deletedAt}) {
   return RemoteAsset(
     id: id,
     localId: localId,
@@ -408,6 +408,7 @@ RemoteAsset _remoteAsset({required String id, required String? localId}) {
     createdAt: DateTime(2026, 4, 20),
     updatedAt: DateTime(2026, 4, 20),
     isEdited: false,
+    deletedAt: deletedAt,
   );
 }
 

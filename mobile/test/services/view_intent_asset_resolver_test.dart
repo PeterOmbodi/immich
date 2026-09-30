@@ -48,7 +48,9 @@ void main() {
     final drift = MockDrift();
     when(() => drift.localAssetRepository).thenReturn(mockLocalAssetRepository);
     when(() => drift.remoteAssetRepository).thenReturn(remoteAssetRepository);
-    when(() => remoteAssetRepository.getCandidatesByChecksum(any(), any())).thenAnswer((_) async => (own: null, timelineVisible: null));
+    when(
+      () => remoteAssetRepository.getCandidatesByChecksum(any(), any()),
+    ).thenAnswer((_) async => (own: null, timelineVisible: null));
 
     container = ProviderContainer(
       overrides: [
@@ -93,19 +95,6 @@ void main() {
     expect((result.asset as RemoteAsset).id, 'remote-1');
     expect((result.asset as RemoteAsset).localId, 'local-1');
     verifyNever(() => nativeSyncApi.hashAssets(any()));
-  });
-
-  test('returns the linked remote asset when it is trashed', () async {
-    final localAsset = _localAsset(id: 'local-1', checksum: 'checksum-1', remoteId: 'remote-1');
-    final remoteAsset = _remoteAsset(id: 'remote-1', checksum: 'checksum-1', deletedAt: DateTime(2026, 4, 21));
-    when(() => mockLocalAssetRepository.get('local-1')).thenAnswer((_) async => localAsset);
-    when(() => assetService.getRemoteAsset('remote-1')).thenAnswer((_) async => remoteAsset);
-
-    final result = await _resolve(container, _payload(localAssetId: 'local-1'));
-
-    expect(result.asset, equals(remoteAsset.copyWith(localId: localAsset.id)));
-    expect(result.timelineService.origin, TimelineOrigin.deepLink);
-    expect(result.viewIntentFilePath, isNull);
   });
 
   test('hashes local asset without checksum and returns remote merged asset', () async {
@@ -184,7 +173,7 @@ void main() {
     expect(asset.playbackStyle, AssetPlaybackStyle.imageAnimated);
   });
 
-  test('keeps a DB-backed local asset when its own remote candidate is trashed', () async {
+  test('returns own trashed candidate for a DB-backed local asset', () async {
     final localAsset = _localAsset(id: 'local-1', checksum: 'checksum-1');
     final ownTrashed = _remoteAsset(id: 'own-trashed', checksum: 'checksum-1', isTrashed: true);
     final partnerTimeline = _remoteAsset(id: 'partner-timeline', checksum: 'checksum-1', ownerId: 'partner-1');
@@ -195,10 +184,10 @@ void main() {
 
     final result = await _resolve(container, _payload(localAssetId: 'local-1'));
 
-    expect(result.asset, equals(localAsset));
+    expect(result.asset, equals(ownTrashed.copyWith(localId: localAsset.id)));
   });
 
-  test('uses a partner timeline candidate when own remote is trashed and the local DB row is absent', () async {
+  test('returns own trashed candidate when the local DB row is absent', () async {
     final ownTrashed = _remoteAsset(id: 'own-trashed', checksum: 'checksum-1', isTrashed: true);
     final partnerTimeline = _remoteAsset(id: 'partner-timeline', checksum: 'checksum-1', ownerId: 'partner-1');
     when(
@@ -210,7 +199,7 @@ void main() {
 
     final result = await _resolve(container, _payload(localAssetId: 'local-1'));
 
-    expect((result.asset as RemoteAsset).id, partnerTimeline.id);
+    expect((result.asset as RemoteAsset).id, ownTrashed.id);
     expect((result.asset as RemoteAsset).localId, 'local-1');
   });
 
