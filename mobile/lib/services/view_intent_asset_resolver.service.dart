@@ -86,7 +86,7 @@ class ViewIntentAssetResolver {
     }
 
     if (own.isTrashed) {
-      return localAsset == null ? candidates.timelineVisible : null;
+      return own;
     }
 
     if (localAsset != null) {
