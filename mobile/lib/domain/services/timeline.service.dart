@@ -41,8 +41,7 @@ enum TimelineOrigin {
 extension BaseAssetTimelineX on BaseAsset? {
   bool isEffectivelyTrashed(TimelineOrigin origin) {
     final asset = this;
-    return origin == TimelineOrigin.trash ||
-        (origin == TimelineOrigin.deepLink && asset is RemoteAsset && asset.isTrashed);
+    return origin == TimelineOrigin.trash || (asset is RemoteAsset && asset.isTrashed);
   }
 }
 
