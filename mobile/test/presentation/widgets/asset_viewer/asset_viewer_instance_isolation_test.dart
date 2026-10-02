@@ -1,0 +1,218 @@
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:immich_mobile/constants/locales.dart';
+import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
+import 'package:immich_mobile/domain/models/timeline.model.dart';
+import 'package:immich_mobile/domain/services/timeline.service.dart';
+import 'package:immich_mobile/generated/codegen_loader.g.dart';
+import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_viewer.page.dart';
+import 'package:immich_mobile/presentation/widgets/asset_viewer/video_viewer.widget.dart';
+import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
+
+import '../../../unit/presentation/presentation_context.dart';
+
+final _fileBackedVideo = FileBackedAsset(
+  path: 'C:/view-intent/video.mp4',
+  checksum: 'file-backed-video-checksum',
+  name: 'video.mp4',
+  type: AssetType.video,
+  createdAt: DateTime(2026),
+  updatedAt: DateTime(2026),
+  playbackStyle: AssetPlaybackStyle.video,
+);
+
+final _fileBackedImage = FileBackedAsset(
+  path: 'C:/view-intent/image.jpg',
+  checksum: 'file-backed-image-checksum',
+  name: 'image.jpg',
+  type: AssetType.image,
+  createdAt: DateTime(2026),
+  updatedAt: DateTime(2026),
+  playbackStyle: AssetPlaybackStyle.image,
+);
+
+final _deepLinkImage = LocalAsset(
+  id: 'deep-link-image-id',
+  name: 'deep-link-image.jpg',
+  type: AssetType.image,
+  createdAt: DateTime(2026),
+  updatedAt: DateTime(2026),
+  playbackStyle: AssetPlaybackStyle.image,
+  isEdited: false,
+);
+
+class _FileBackedViewerNotifier extends AssetViewerStateNotifier {
+  @override
+  AssetViewerState build() => AssetViewerState(currentAsset: _fileBackedVideo);
+}
+
+class _FileBackedImageViewerNotifier extends AssetViewerStateNotifier {
+  @override
+  AssetViewerState build() => AssetViewerState(currentAsset: _fileBackedImage);
+}
+
+class _DeepLinkImageViewerNotifier extends AssetViewerStateNotifier {
+  @override
+  AssetViewerState build() => AssetViewerState(currentAsset: _deepLinkImage);
+}
+
+TimelineService _timeline() => TimelineService((
+  assetSource: (_, _) async => [_fileBackedVideo],
+  bucketSource: () => Stream.value(const [Bucket(assetCount: 1)]),
+  origin: TimelineOrigin.deepLink,
+));
+
+TimelineService _imageTimeline() => TimelineService((
+  assetSource: (_, _) async => [_fileBackedImage],
+  bucketSource: () => Stream.value(const [Bucket(assetCount: 1)]),
+  origin: TimelineOrigin.deepLink,
+));
+
+TimelineService _deepLinkImageTimeline() => TimelineService((
+  assetSource: (_, _) async => [_deepLinkImage],
+  bucketSource: () => Stream.value(const [Bucket(assetCount: 1)]),
+  origin: TimelineOrigin.deepLink,
+));
+
+void main() {
+  late PresentationContext context;
+
+  setUp(() async {
+    context = await PresentationContext.create();
+  });
+
+  tearDown(() async {
+    await context.dispose();
+  });
+
+  testWidgets('separate viewer instances do not share native video keys', (tester) async {
+    final firstTimeline = _timeline();
+    final secondTimeline = _timeline();
+    addTearDown(firstTimeline.dispose);
+    addTearDown(secondTimeline.dispose);
+
+    Widget viewer(TimelineService timeline, int heroOffset) => Expanded(
+      child: ProviderScope(
+        overrides: [
+          timelineServiceProvider.overrideWithValue(timeline),
+          assetViewerProvider.overrideWith(_FileBackedViewerNotifier.new),
+        ],
+        child: AssetViewer(initialIndex: 0, heroOffset: heroOffset),
+      ),
+    );
+
+    await tester.pumpWidget(
+      EasyLocalization(
+        supportedLocales: locales.values.toList(),
+        path: translationsPath,
+        startLocale: locales.values.first,
+        fallbackLocale: locales.values.first,
+        saveLocale: false,
+        useFallbackTranslations: true,
+        assetLoader: const CodegenLoader(),
+        child: ProviderScope(
+          overrides: context.overrides,
+          child: Builder(
+            builder: (context) => MaterialApp(
+              localizationsDelegates: context.localizationDelegates,
+              supportedLocales: context.supportedLocales,
+              locale: context.locale,
+              home: Row(children: [viewer(firstTimeline, 0), viewer(secondTimeline, 1)]),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final exceptions = <Object>[];
+    Object? exception;
+    while ((exception = tester.takeException()) != null) {
+      exceptions.add(exception!);
+    }
+
+    expect(exceptions.where((error) => error.toString().contains('GlobalKey')), isEmpty);
+    final videoViewers = tester.widgetList<NativeVideoViewer>(find.byType(NativeVideoViewer));
+    expect(videoViewers.map((viewer) => viewer.key), everyElement(isA<ValueKey<String>>()));
+    expect(find.byIcon(Icons.play_circle_outline), findsNWidgets(2));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('a file-backed deep-link image does not create a Hero', (tester) async {
+    final timeline = _imageTimeline();
+    addTearDown(timeline.dispose);
+
+    await tester.pumpWidget(
+      EasyLocalization(
+        supportedLocales: locales.values.toList(),
+        path: translationsPath,
+        startLocale: locales.values.first,
+        fallbackLocale: locales.values.first,
+        saveLocale: false,
+        useFallbackTranslations: true,
+        assetLoader: const CodegenLoader(),
+        child: ProviderScope(
+          overrides: [
+            ...context.overrides,
+            timelineServiceProvider.overrideWithValue(timeline),
+            assetViewerProvider.overrideWith(_FileBackedImageViewerNotifier.new),
+          ],
+          child: Builder(
+            builder: (context) => MaterialApp(
+              localizationsDelegates: context.localizationDelegates,
+              supportedLocales: context.supportedLocales,
+              locale: context.locale,
+              home: const AssetViewer(initialIndex: 0),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(Hero), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('a regular deep-link image keeps its Hero', (tester) async {
+    final timeline = _deepLinkImageTimeline();
+    addTearDown(timeline.dispose);
+
+    await tester.pumpWidget(
+      EasyLocalization(
+        supportedLocales: locales.values.toList(),
+        path: translationsPath,
+        startLocale: locales.values.first,
+        fallbackLocale: locales.values.first,
+        saveLocale: false,
+        useFallbackTranslations: true,
+        assetLoader: const CodegenLoader(),
+        child: ProviderScope(
+          overrides: [
+            ...context.overrides,
+            timelineServiceProvider.overrideWithValue(timeline),
+            assetViewerProvider.overrideWith(_DeepLinkImageViewerNotifier.new),
+          ],
+          child: Builder(
+            builder: (context) => MaterialApp(
+              localizationsDelegates: context.localizationDelegates,
+              supportedLocales: context.supportedLocales,
+              locale: context.locale,
+              home: const AssetViewer(initialIndex: 0),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(Hero), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+}

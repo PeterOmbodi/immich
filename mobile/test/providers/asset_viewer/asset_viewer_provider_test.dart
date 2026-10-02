@@ -26,6 +26,23 @@ void main() {
   });
 
   group('AssetViewerStateNotifier asset watching', () {
+    test('does not send file-backed assets through the generic asset watcher', () {
+      final asset = FileBackedAsset(
+        path: 'C:/view-intent/image.jpg',
+        checksum: 'file-backed-checksum',
+        name: 'image.jpg',
+        type: AssetType.image,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+        playbackStyle: AssetPlaybackStyle.image,
+      );
+
+      container.read(assetViewerProvider.notifier).setAsset(asset);
+
+      expect(container.read(assetViewerProvider).currentAsset, asset);
+      verifyNever(() => assetService.watchAsset(asset));
+    });
+
     test('propagates stream updates for the current asset into state', () async {
       final controller = StreamController<BaseAsset?>();
       addTearDown(controller.close);

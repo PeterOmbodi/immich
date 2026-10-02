@@ -12,6 +12,16 @@ void main() {
   late ImageCache cache;
   late int loads;
 
+  final fileBackedImage = FileBackedAsset(
+    path: 'C:/view-intent/image.jpg',
+    checksum: 'file-backed-checksum',
+    name: 'image.jpg',
+    type: AssetType.image,
+    createdAt: DateTime(2026),
+    updatedAt: DateTime(2026),
+    playbackStyle: AssetPlaybackStyle.image,
+  );
+
   ImageStreamCompleter load() {
     loads++;
     return _StubCompleter();
@@ -103,6 +113,20 @@ void main() {
   });
 
   group('factories', () {
+    test('full images use the managed file for file-backed assets', () {
+      final provider = getFullImageProvider(fileBackedImage);
+
+      expect(provider, isA<FileImage>());
+      expect((provider as FileImage).file.path, fileBackedImage.path);
+    });
+
+    test('thumbnails use the managed file for file-backed assets', () {
+      final provider = getThumbnailImageProvider(fileBackedImage) as FileImage?;
+
+      expect(provider, isNotNull);
+      expect(provider?.file.path, fileBackedImage.path);
+    });
+
     test('thumbnails are keyed by the asset checksum', () {
       final asset = LocalAssetFactory.create().copyWith(checksum: 'abc');
 

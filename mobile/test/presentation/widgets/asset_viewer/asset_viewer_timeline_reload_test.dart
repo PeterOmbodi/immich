@@ -40,6 +40,14 @@ class _UploadedAssetViewerNotifier extends AssetViewerStateNotifier {
   }
 }
 
+class _UnrelatedAssetViewerNotifier extends AssetViewerStateNotifier {
+  @override
+  AssetViewerState build() {
+    super.build();
+    return AssetViewerState(currentAsset: LocalAssetStub.image2);
+  }
+}
+
 TimelineService _timeline(TimelineOrigin origin) {
   return TimelineService((
     assetSource: (_, _) async => [LocalAssetStub.image1],
@@ -51,8 +59,9 @@ TimelineService _timeline(TimelineOrigin origin) {
 Future<ProviderContainer> _pumpViewer(
   WidgetTester tester,
   PresentationContext presentationContext,
-  TimelineService timeline,
-) async {
+  TimelineService timeline, {
+  Override? assetViewerOverride,
+}) async {
   late ProviderContainer container;
   await tester.pumpWidget(
     EasyLocalization(
@@ -67,7 +76,7 @@ Future<ProviderContainer> _pumpViewer(
         overrides: [
           ...presentationContext.overrides,
           timelineServiceProvider.overrideWithValue(timeline),
-          assetViewerProvider.overrideWith(_UploadedAssetViewerNotifier.new),
+          assetViewerOverride ?? assetViewerProvider.overrideWith(_UploadedAssetViewerNotifier.new),
         ],
         child: Builder(
           builder: (context) {
@@ -113,6 +122,20 @@ void main() {
     expect(container.read(assetViewerProvider).currentAsset, same(_uploadedAsset));
     expect(find.byKey(Key(_uploadedAsset.heroTag)), findsOneWidget);
     expect(find.byKey(Key(LocalAssetStub.image1.heroTag)), findsNothing);
+  });
+
+  testWidgets('an outgoing deep-link viewer keeps the asset from its own timeline', (tester) async {
+    final timeline = _timeline(TimelineOrigin.deepLink);
+    addTearDown(timeline.dispose);
+    await _pumpViewer(
+      tester,
+      presentationContext,
+      timeline,
+      assetViewerOverride: assetViewerProvider.overrideWith(_UnrelatedAssetViewerNotifier.new),
+    );
+
+    expect(find.byKey(Key(LocalAssetStub.image1.heroTag)), findsOneWidget);
+    expect(find.byKey(Key(LocalAssetStub.image2.heroTag)), findsNothing);
   });
 
   testWidgets('keeps a view-intent asset during reload of the previous timeline', (tester) async {

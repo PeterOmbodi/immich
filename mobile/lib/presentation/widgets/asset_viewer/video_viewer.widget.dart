@@ -20,7 +20,6 @@ import 'package:native_video_player/native_video_player.dart';
 
 class NativeVideoViewer extends ConsumerStatefulWidget {
   final BaseAsset asset;
-  final String? localFilePath;
   final bool isCurrent;
   final Widget image;
 
@@ -30,7 +29,6 @@ class NativeVideoViewer extends ConsumerStatefulWidget {
   const NativeVideoViewer({
     super.key,
     required this.asset,
-    this.localFilePath,
     required this.image,
     this.isCurrent = false,
     this.loopOverride,
@@ -106,27 +104,23 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
       return null;
     }
 
-    final videoAsset = await ref.read(assetServiceProvider).getAsset(widget.asset) ?? widget.asset;
+    final videoAsset = widget.asset is FileBackedAsset
+        ? widget.asset
+        : await ref.read(assetServiceProvider).getAsset(widget.asset) ?? widget.asset;
     if (!mounted) {
       return null;
     }
 
     try {
-      final storageRepository = ref.read(storageRepositoryProvider);
-      final localFilePath = widget.localFilePath;
-      if (localFilePath != null) {
-        final file = File(localFilePath);
-        // ignore: avoid_slow_async_io
-        if (!await file.exists()) {
-          throw Exception('No file found for the video');
-        }
-
+      if (videoAsset case FileBackedAsset(:final path)) {
+        final file = File(path);
         return await VideoSource.init(
           path: CurrentPlatform.isAndroid ? file.uri.toString() : file.path,
           type: VideoSourceType.file,
         );
       }
 
+      final storageRepository = ref.read(storageRepositoryProvider);
       // Attempt to retrieve LocalAsset, falling back to remote if it cannot be found
       final localAsset = await _localPlaybackAsset(videoAsset);
 
