@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/timeline.model.dart';
 import 'package:immich_mobile/domain/services/timeline.service.dart';
+import 'package:immich_mobile/models/view_intent/view_intent_payload.extension.dart';
 import 'package:immich_mobile/platform/native_sync_api.g.dart';
 import 'package:immich_mobile/platform/view_intent_api.g.dart';
 import 'package:immich_mobile/providers/infrastructure/db.provider.dart';
@@ -158,19 +159,91 @@ void main() {
     expect((result.asset as RemoteAsset).localId, 'local-1');
   });
 
-  test('returns transient asset for path-only attachment', () async {
+  test('returns a file-backed asset for a materialized path-only attachment', () async {
+    const timestamp = 1_700_000_000_000;
     final result = await _resolve(
       container,
-      _payload(localAssetId: null, path: '/tmp/incoming.webp', mimeType: 'image/webp'),
+      _payload(
+        localAssetId: null,
+        path: '/tmp/view_intent_1.webp',
+        mimeType: 'image/webp',
+        checksum: 'checksum-1',
+        displayName: r'folder\incoming',
+        sourceModifiedAt: timestamp,
+      ),
     );
 
-    expect(result.asset, isA<LocalAsset>());
-    expect(result.viewIntentFilePath, '/tmp/incoming.webp');
+    expect(result.asset, isA<FileBackedAsset>());
+    expect(result.viewIntentFilePath, '/tmp/view_intent_1.webp');
 
-    final asset = result.asset as LocalAsset;
-    expect(asset.localId, startsWith('-'));
+    final asset = result.asset as FileBackedAsset;
+    expect(asset.path, '/tmp/view_intent_1.webp');
+    expect(asset.checksum, 'checksum-1');
+    expect(asset.localId, isNull);
+    expect(asset.remoteId, isNull);
     expect(asset.name, 'incoming.webp');
+    expect(asset.type, AssetType.image);
     expect(asset.playbackStyle, AssetPlaybackStyle.imageAnimated);
+    expect(asset.createdAt, DateTime.fromMillisecondsSinceEpoch(timestamp));
+    expect(asset.updatedAt, DateTime.fromMillisecondsSinceEpoch(timestamp));
+  });
+
+  test('returns a viewable remote asset for a materialized path-only checksum', () async {
+    final remoteAsset = _remoteAsset(id: 'remote-1', checksum: 'checksum-1');
+    when(
+      () => remoteAssetRepository.getCandidatesByChecksum(['user-1'], 'checksum-1'),
+    ).thenAnswer((_) async => (own: remoteAsset, timelineVisible: remoteAsset));
+
+    final result = await _resolve(
+      container,
+      _payload(localAssetId: null, path: '/tmp/view_intent_1.jpg', checksum: 'checksum-1'),
+    );
+
+    expect(result.asset, isA<RemoteAsset>());
+    expect((result.asset as RemoteAsset).id, 'remote-1');
+    expect((result.asset as RemoteAsset).localId, isNull);
+  });
+
+  test('uses current time for a missing or non-positive source timestamp', () async {
+    for (final timestamp in <int?>[null, 0, -1]) {
+      final before = DateTime.now();
+      final result = await _resolve(
+        container,
+        _payload(
+          localAssetId: null,
+          path: '/tmp/view_intent_$timestamp.jpg',
+          checksum: 'checksum-$timestamp',
+          sourceModifiedAt: timestamp,
+        ),
+      );
+      final after = DateTime.now();
+
+      final asset = result.asset as FileBackedAsset;
+      expect(asset.createdAt.isBefore(before), isFalse);
+      expect(asset.createdAt.isAfter(after), isFalse);
+      expect(asset.updatedAt, asset.createdAt);
+    }
+  });
+
+  test('normalizes provider display names', () {
+    final cases = <({String path, String displayName, String expected})>[
+      (path: '/tmp/view_intent_1.jpg', displayName: r'folder/subfolder\photo.jpg', expected: 'photo.jpg'),
+      (path: '/tmp/view_intent_2.jpg', displayName: 'photo...', expected: 'photo.jpg'),
+      (path: '/tmp/view_intent_3.jpg', displayName: 'photo', expected: 'photo.jpg'),
+      (path: '/tmp/view_intent_4.jpg', displayName: 'photo.2026', expected: 'photo.2026.jpg'),
+      (path: '/tmp/view_intent_5.tmp', displayName: 'photo.png', expected: 'photo.png'),
+    ];
+
+    for (final testCase in cases) {
+      final payload = _payload(
+        localAssetId: null,
+        path: testCase.path,
+        checksum: 'checksum',
+        displayName: testCase.displayName,
+      );
+
+      expect(payload.fileName, testCase.expected, reason: testCase.displayName);
+    }
   });
 
   test('keeps a DB-backed local asset when its own remote candidate is trashed', () async {
@@ -221,14 +294,35 @@ void main() {
   test('throws when neither localAssetId nor path is provided', () async {
     await expectLater(_resolve(container, _payload(localAssetId: null, path: null)), throwsA(isA<StateError>()));
   });
+
+  test('rejects a path-only payload without checksum', () async {
+    await expectLater(
+      _resolve(container, _payload(localAssetId: null, path: '/tmp/view_intent_1.jpg')),
+      throwsA(isA<StateError>()),
+    );
+  });
 }
 
 Future<ViewIntentResolution> _resolve(ProviderContainer container, ViewIntentPayload payload) {
   return container.read(viewIntentAssetResolverProvider).resolve(payload);
 }
 
-ViewIntentPayload _payload({String? localAssetId = 'local-1', String? path, String mimeType = 'image/jpeg'}) {
-  return ViewIntentPayload(path: path, mimeType: mimeType, localAssetId: localAssetId);
+ViewIntentPayload _payload({
+  String? localAssetId = 'local-1',
+  String? path,
+  String mimeType = 'image/jpeg',
+  String? checksum,
+  String? displayName,
+  int? sourceModifiedAt,
+}) {
+  return ViewIntentPayload(
+    path: path,
+    mimeType: mimeType,
+    localAssetId: localAssetId,
+    checksum: checksum,
+    displayName: displayName,
+    sourceModifiedAt: sourceModifiedAt,
+  );
 }
 
 LocalAsset _localAsset({required String id, String? checksum}) {

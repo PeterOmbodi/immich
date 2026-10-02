@@ -45,17 +45,18 @@ class ViewIntentAssetResolver {
     required this._timelineUsers,
   });
 
-  Future<ViewIntentResolution> resolve(ViewIntentPayload attachment) async {
-    final localAssetId = attachment.localAssetId;
-    final path = attachment.path;
-    _logger.fine('resolve start, localAssetId=$localAssetId, path=$path, mimeType=${attachment.mimeType}');
+  Future<ViewIntentResolution> resolve(ViewIntentPayload payload) async {
+    final localAssetId = payload.localAssetId;
+    final path = payload.path;
+    _logger.fine('resolve start, localAssetId=$localAssetId, path=$path, mimeType=${payload.mimeType}');
 
     if (localAssetId == null && path == null) {
       throw StateError('ViewIntent resolution requires either a localAssetId or a materialized file path.');
     }
 
     final localAsset = localAssetId == null ? null : await _localAssetRepository.getById(localAssetId);
-    final checksum = localAsset?.checksum ?? (localAssetId == null ? null : await _hashLocalAsset(localAssetId));
+    final checksum =
+        localAsset?.checksum ?? (localAssetId == null ? payload.checksum : await _hashLocalAsset(localAssetId));
     if (localAsset != null && localAsset.checksum == null && checksum != null) {
       await _localAssetRepository.updateHashes({localAsset.id: checksum});
     }
@@ -66,14 +67,21 @@ class ViewIntentAssetResolver {
     final remoteAsset = candidates == null ? null : _selectRemoteAsset(candidates, localAsset);
     if (remoteAsset != null) {
       _logger.fine('resolve matched remote asset by checksum: $checksum, asset=$remoteAsset');
-      return _resolution(remoteAsset.copyWith(localId: localAssetId));
+      return _resolution(
+        localAssetId == null ? remoteAsset : remoteAsset.copyWith(localId: localAssetId),
+        viewIntentFilePath: localAssetId == null ? path : null,
+      );
     }
 
     if (localAsset != null) {
       return _resolution(localAsset.copyWith(checksum: checksum));
     }
 
-    return _resolution(_toTransientAsset(attachment, checksum), viewIntentFilePath: path);
+    if (localAssetId == null) {
+      return _resolution(_toFileBackedAsset(payload), viewIntentFilePath: path);
+    }
+
+    return _resolution(_toTransientAsset(payload, checksum), viewIntentFilePath: path);
   }
 
   RemoteAsset? _selectRemoteAsset(
@@ -121,18 +129,39 @@ class ViewIntentAssetResolver {
     }
   }
 
-  LocalAsset _toTransientAsset(ViewIntentPayload attachment, String? checksum) {
+  LocalAsset _toTransientAsset(ViewIntentPayload payload, String? checksum) {
     final now = DateTime.now();
-    // A FileBackedAsset could model the path more explicitly, but would require broader changes to the asset hierarchy.
     return LocalAsset(
-      id: attachment.localAssetId ?? '-${attachment.path!.hashCode.abs()}',
-      name: attachment.fileName,
+      id: payload.localAssetId!,
+      name: payload.fileName,
       checksum: checksum,
-      type: attachment.isVideo ? AssetType.video : AssetType.image,
+      type: payload.isVideo ? AssetType.video : AssetType.image,
       createdAt: now,
       updatedAt: now,
       isEdited: false,
-      playbackStyle: attachment.playbackStyle,
+      playbackStyle: payload.playbackStyle,
+    );
+  }
+
+  FileBackedAsset _toFileBackedAsset(ViewIntentPayload payload) {
+    final path = payload.path;
+    final checksum = payload.checksum;
+    if (path == null || checksum == null) {
+      throw StateError('A materialized view intent requires both a path and checksum.');
+    }
+
+    final sourceModifiedAt = payload.sourceModifiedAt;
+    final timestamp = sourceModifiedAt == null || sourceModifiedAt <= 0
+        ? DateTime.now()
+        : DateTime.fromMillisecondsSinceEpoch(sourceModifiedAt);
+    return FileBackedAsset(
+      path: path,
+      checksum: checksum,
+      name: payload.fileName,
+      type: payload.isVideo ? AssetType.video : AssetType.image,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      playbackStyle: payload.playbackStyle,
     );
   }
 }
