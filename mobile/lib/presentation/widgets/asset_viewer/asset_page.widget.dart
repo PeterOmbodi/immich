@@ -488,6 +488,7 @@ class _AssetPageState extends ConsumerState<AssetPage> {
                   height: viewportHeight,
                   child: _buildPhotoView(
                     asset: displayAsset,
+                    // A file-backed asset has no source thumbnail to participate in a Hero transition.
                     heroAttributes: isCurrent && asset is! FileBackedAsset
                         ? PhotoViewHeroAttributes(tag: '${asset.heroTag}_${widget.heroOffset}')
                         : null,

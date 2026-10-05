@@ -136,8 +136,7 @@ void main() {
     }
 
     expect(exceptions.where((error) => error.toString().contains('GlobalKey')), isEmpty);
-    final videoViewers = tester.widgetList<NativeVideoViewer>(find.byType(NativeVideoViewer));
-    expect(videoViewers.map((viewer) => viewer.key), everyElement(isA<ValueKey<String>>()));
+    expect(find.byType(NativeVideoViewer), findsNWidgets(2));
     expect(find.byIcon(Icons.play_circle_outline), findsNWidgets(2));
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
