@@ -68,10 +68,11 @@ void main() {
     expect(find.byType(ViewerBottomBar), findsOneWidget);
     expect(find.byType(VideoControls), findsOneWidget);
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.backup_outlined), findsOneWidget);
 
     expect(find.byType(ActionIconButton), findsNothing);
     expect(find.byType(ViewerKebabMenu), findsNothing);
-    expect(find.byType(ImmichColumnButton), findsNothing);
+    expect(find.byType(ImmichColumnButton), findsOneWidget);
     expect(find.byType(OcrToggleButton), findsNothing);
   });
 }

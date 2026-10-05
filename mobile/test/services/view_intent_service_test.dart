@@ -92,6 +92,19 @@ void main() {
     expect(await nonManagedFile.exists(), isTrue);
   });
 
+  test('active upload keeps its temp file until the upload finishes', () async {
+    final file = File('${cacheDir.path}/view_intent_upload.jpg')..writeAsStringSync('content');
+
+    service.markUploadActive(file.path);
+    await service.cleanupTempFile(file.path);
+
+    expect(await file.exists(), isTrue);
+
+    await service.markUploadInactive(file.path);
+
+    expect(await file.exists(), isFalse);
+  });
+
   test('cleanupStaleTempFiles removes view-intent temp files and keeps unrelated files', () async {
     final firstFile = File('${cacheDir.path}/view_intent_first.jpg')..writeAsStringSync('first');
     final secondFile = File('${cacheDir.path}/view_intent_second.jpg')..writeAsStringSync('second');

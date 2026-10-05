@@ -6,6 +6,7 @@ import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/presentation/actions/action.dart';
 import 'package:immich_mobile/presentation/actions/delete.action.dart';
 import 'package:immich_mobile/presentation/actions/edit_asset.action.dart';
+import 'package:immich_mobile/presentation/actions/file_backed_upload.action.dart';
 import 'package:immich_mobile/presentation/actions/restore.action.dart';
 import 'package:immich_mobile/presentation/actions/share.action.dart';
 import 'package:immich_mobile/presentation/actions/upload.action.dart';
@@ -46,7 +47,7 @@ class ViewerBottomBar extends ConsumerWidget {
     final originalTheme = context.themeData;
 
     final actions = asset is FileBackedAsset
-        ? <Widget>[]
+        ? _actionColumnButtons(context, ref, const [FileBackedUploadAction(source: .viewer)])
         : <Widget>[
             ..._actionColumnButtons(context, ref, const [RestoreAction(source: .viewer), ShareAction(source: .viewer)]),
 
