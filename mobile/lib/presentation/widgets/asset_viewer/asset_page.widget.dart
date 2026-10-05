@@ -11,6 +11,7 @@ import 'package:immich_mobile/domain/services/timeline.service.dart';
 import 'package:immich_mobile/domain/utils/event_stream.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/extensions/scroll_extensions.dart';
+import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_details.widget.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_stack.provider.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_stack.widget.dart';
@@ -377,11 +378,13 @@ class _AssetPageState extends ConsumerState<AssetPage> {
           onDragCancel: _onDragCancel,
           onTapUp: _onTapUp,
           onLongPressStart: asset.isMotionPhoto ? _onLongPress : null,
-          errorBuilder: (_, _, _) => SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Thumbnail.fromAsset(asset: asset, fit: BoxFit.contain),
-          ),
+          errorBuilder: (_, _, _) => asset is FileBackedAsset
+              ? _FilePreviewUnavailable(fileName: asset.name)
+              : SizedBox(
+                  width: size.width,
+                  height: size.height,
+                  child: Thumbnail.fromAsset(asset: asset, fit: BoxFit.contain),
+                ),
         ),
       );
     }
@@ -535,6 +538,36 @@ class _AssetPageState extends ConsumerState<AssetPage> {
             child: AssetStackRow(stack: stackChildren),
           ),
       ],
+    );
+  }
+}
+
+class _FilePreviewUnavailable extends StatelessWidget {
+  const _FilePreviewUnavailable({required this.fileName});
+
+  final String fileName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.image_not_supported_outlined, color: Colors.white70, size: 48),
+          const SizedBox(height: 12),
+          Text(context.t.preview_unavailable, style: context.textTheme.titleMedium?.copyWith(color: Colors.white)),
+          const SizedBox(height: 4),
+          Text(
+            fileName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: context.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+          ),
+        ],
+      ),
     );
   }
 }

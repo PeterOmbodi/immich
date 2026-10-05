@@ -11,6 +11,7 @@ import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_viewer.pag
 import 'package:immich_mobile/presentation/widgets/asset_viewer/video_viewer.widget.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
+import 'package:immich_mobile/widgets/photo_view/photo_view.dart';
 
 import '../../../unit/presentation/presentation_context.dart';
 
@@ -175,6 +176,39 @@ void main() {
     await tester.pump();
 
     expect(find.byType(Hero), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('explains when a file-backed image cannot be previewed', (tester) async {
+    final timeline = _imageTimeline();
+    addTearDown(timeline.dispose);
+
+    await tester.pumpTestWidget(
+      context,
+      const AssetViewer(initialIndex: 0),
+      overrides: [
+        timelineServiceProvider.overrideWithValue(timeline),
+        assetViewerProvider.overrideWith(_FileBackedImageViewerNotifier.new),
+      ],
+      expectSettle: false,
+    );
+    final photoViewFinder = find.byType(PhotoView);
+    final photoView = tester.widget<PhotoView>(photoViewFinder);
+    final errorWidget = photoView.errorBuilder!(
+      tester.element(photoViewFinder),
+      StateError('unsupported image'),
+      StackTrace.empty,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpTestWidget(context, errorWidget, expectSettle: false);
+
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
+    expect(find.text('Preview unavailable'), findsOneWidget);
+    expect(find.text(_fileBackedImage.name), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
