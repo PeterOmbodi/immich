@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:immich_mobile/constants/enums.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
@@ -78,5 +79,41 @@ void main() {
         callbacks: any(named: 'callbacks'),
       ),
     ).called(1);
+  });
+
+  testWidgets('cancels a file-backed upload from the progress dialog', (tester) async {
+    late Completer<void> cancelToken;
+    when(
+      () => upload.upload(
+        asset: asset,
+        cancelToken: any(named: 'cancelToken'),
+        callbacks: any(named: 'callbacks'),
+      ),
+    ).thenAnswer((invocation) async {
+      cancelToken = invocation.namedArguments[#cancelToken] as Completer<void>;
+      await cancelToken.future;
+    });
+
+    await tester.pumpTestWidget(
+      context,
+      const ActionIconButton(action: FileBackedUploadAction(source: ActionSource.viewer)),
+      overrides: [
+        assetsActionProvider(ActionSource.viewer).overrideWithValue(AssetFilter<BaseAsset>({asset})),
+        viewIntentUploadProvider.overrideWithValue(upload),
+        toastServiceProvider.overrideWithValue(context.service.toast),
+      ],
+    );
+
+    await tester.tap(find.byType(ImmichIconButton));
+    await tester.pump();
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    await tester.tap(find.byType(ImmichTextButton));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(cancelToken.isCompleted, isTrue);
+    expect(find.byType(AlertDialog), findsNothing);
+    verifyNever(() => context.service.toast.error(any()));
   });
 }
