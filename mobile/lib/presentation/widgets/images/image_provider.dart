@@ -160,13 +160,12 @@ ImageProvider getFullImageProvider(
   BaseAsset asset, {
   Size size = const Size(1080, 1920),
   bool edited = true,
-  String? localFilePath,
   Size? remoteThumbnailSize,
 }) {
   // Create new provider and cache it
   final ImageProvider provider;
-  if (localFilePath != null) {
-    provider = FileImage(File(localFilePath));
+  if (asset is FileBackedAsset) {
+    provider = FileImage(File(asset.path));
   } else if (_shouldUseLocalAsset(asset)) {
     final id = asset is LocalAsset ? asset.id : (asset as RemoteAsset).localId!;
     provider = LocalFullImageProvider(
@@ -211,6 +210,10 @@ ImageProvider? getThumbnailImageProvider(
   Size? remoteSize,
   bool edited = true,
 }) {
+  if (asset is FileBackedAsset) {
+    return FileImage(File(asset.path));
+  }
+
   if (_shouldUseLocalAsset(asset)) {
     final id = asset is LocalAsset ? asset.id : (asset as RemoteAsset).localId!;
     return LocalThumbProvider(id: id, size: size, assetType: asset.type, checksum: asset.checksum);

@@ -13,8 +13,18 @@ class ViewIntentPayload {
   final String? path;
   final String mimeType;
   final String? localAssetId;
+  final String? checksum;
+  final String? displayName;
+  final int? sourceModifiedAt;
 
-  const ViewIntentPayload({this.path, required this.mimeType, this.localAssetId});
+  const ViewIntentPayload({
+    this.path,
+    required this.mimeType,
+    this.localAssetId,
+    this.checksum,
+    this.displayName,
+    this.sourceModifiedAt,
+  });
 }
 
 @HostApi()

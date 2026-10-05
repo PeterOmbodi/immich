@@ -101,7 +101,7 @@ class ViewerTopAppBar extends ConsumerWidget implements PreferredSizeWidget {
                     centerMiddle: true,
                     leading: const _AppBarBackButton(),
                     middle: showingDetails ? null : _AssetInfoTitle(asset: asset),
-                    trailing: !showingDetails && !isReadonlyModeEnabled
+                    trailing: !showingDetails && !isReadonlyModeEnabled && asset is! FileBackedAsset
                         ? ImmichColorOverride(
                             color: Colors.white,
                             child: Row(

@@ -6,11 +6,11 @@ import 'package:immich_mobile/constants/enums.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/presentation/actions/action.dart';
+import 'package:immich_mobile/presentation/widgets/upload_progress_dialog.widget.dart';
 import 'package:immich_mobile/providers/backup/asset_upload_progress.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/toast.provider.dart';
 import 'package:immich_mobile/services/foreground_upload.service.dart';
 import 'package:immich_mobile/utils/error_handler.dart';
-import 'package:immich_ui/immich_ui.dart';
 
 final _stateProvider = Provider.family.autoDispose<List<LocalAsset>?, ActionSource>((ref, source) {
   final assets = ref.watch(assetsActionProvider(source));
@@ -47,7 +47,7 @@ class UploadAction extends AssetActionBuilder {
         showDialog<void>(
           context: context,
           barrierDismissible: false,
-          builder: (_) => const _UploadProgressDialog(),
+          builder: (_) => const UploadProgressDialog(),
         ).whenComplete(() => isDialogOpen = false),
       );
 
@@ -104,42 +104,4 @@ Future<void> uploadAssets(BuildContext context, WidgetRef ref, List<LocalAsset> 
   }
 
   unawaited(Future.delayed(const Duration(seconds: 2), progress.clear));
-}
-
-class _UploadProgressDialog extends ConsumerWidget {
-  const _UploadProgressDialog();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final progressMap = ref.watch(assetUploadProgressProvider);
-
-    final values = progressMap.values.where((value) => value >= 0).toList(growable: false);
-    final progress = values.isEmpty ? 0.0 : values.reduce((a, b) => a + b) / values.length;
-    final hasError = progressMap.values.any((value) => value < 0);
-
-    return AlertDialog(
-      title: Text(context.t.uploading),
-      content: Column(
-        mainAxisSize: .min,
-        children: [
-          if (hasError)
-            const Icon(Icons.error_outline, color: Colors.red, size: 48)
-          else
-            CircularProgressIndicator(value: progress > 0 ? progress : null),
-          const SizedBox(height: 16),
-          Text(hasError ? context.t.scaffold_body_error_occurred : '${(progress * 100).toInt()}%'),
-        ],
-      ),
-      actions: [
-        ImmichTextButton(
-          onPressed: () {
-            ref.read(manualUploadCancelTokenProvider)?.complete();
-            ref.read(manualUploadCancelTokenProvider.notifier).state = null;
-            Navigator.of(context, rootNavigator: true).pop();
-          },
-          labelText: context.t.cancel,
-        ),
-      ],
-    );
-  }
 }

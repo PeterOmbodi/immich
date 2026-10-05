@@ -121,6 +121,7 @@ class MediumRepositoryContext {
     String? stackId,
     String? thumbHash,
     String? libraryId,
+    Option<String>? libraryIdOption,
     DateTime? localDateTime,
   }) async {
     id ??= TestUtils.uuid();
@@ -147,7 +148,7 @@ class MediumRepositoryContext {
             stackId: .new(stackId),
             localDateTime: .new(localDateTime ?? createdAt.toLocal()),
             thumbHash: .new(TestUtils.uuid(thumbHash)),
-            libraryId: .new(TestUtils.uuid(libraryId)),
+            libraryId: _resolveOption(libraryIdOption, TestUtils.uuid(libraryId)),
           ),
         );
   }

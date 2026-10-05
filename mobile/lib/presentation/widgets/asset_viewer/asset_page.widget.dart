@@ -11,6 +11,7 @@ import 'package:immich_mobile/domain/services/timeline.service.dart';
 import 'package:immich_mobile/domain/utils/event_stream.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/extensions/scroll_extensions.dart';
+import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_details.widget.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_stack.provider.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_stack.widget.dart';
@@ -23,7 +24,6 @@ import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart'
 import 'package:immich_mobile/providers/asset_viewer/is_motion_video_playing.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/settings.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
-import 'package:immich_mobile/providers/view_intent/view_intent_file_path.provider.dart';
 import 'package:immich_mobile/widgets/common/immich_loading_indicator.dart';
 import 'package:immich_mobile/widgets/photo_view/photo_view.dart';
 
@@ -350,18 +350,12 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     required PhotoViewHeroAttributes? heroAttributes,
     required bool isCurrent,
     required bool isPlayingMotionVideo,
-    required String? localFilePath,
     required Size? remoteThumbnailSize,
   }) {
     final size = context.sizeData;
-    final imageProvider = getFullImageProvider(
-      asset,
-      size: size,
-      localFilePath: localFilePath,
-      remoteThumbnailSize: remoteThumbnailSize,
-    );
 
     if (asset.isImage && !isPlayingMotionVideo) {
+      final imageProvider = getFullImageProvider(asset, size: size, remoteThumbnailSize: remoteThumbnailSize);
       return ProgressiveImage(
         provider: imageProvider,
         builder: (context, provider) => PhotoView(
@@ -384,11 +378,13 @@ class _AssetPageState extends ConsumerState<AssetPage> {
           onDragCancel: _onDragCancel,
           onTapUp: _onTapUp,
           onLongPressStart: asset.isMotionPhoto ? _onLongPress : null,
-          errorBuilder: (_, _, _) => SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Thumbnail.fromAsset(asset: asset, fit: BoxFit.contain),
-          ),
+          errorBuilder: (_, _, _) => asset is FileBackedAsset
+              ? _FilePreviewUnavailable(fileName: asset.name)
+              : SizedBox(
+                  width: size.width,
+                  height: size.height,
+                  child: Thumbnail.fromAsset(asset: asset, fit: BoxFit.contain),
+                ),
         ),
       );
     }
@@ -415,11 +411,16 @@ class _AssetPageState extends ConsumerState<AssetPage> {
       onPageBuild: _onPageBuild,
       enablePanAlways: true,
       child: NativeVideoViewer(
-        key: _NativeVideoViewerKey(asset.heroTag),
+        key: asset is FileBackedAsset ? ValueKey(asset.heroTag) : _NativeVideoViewerKey(asset.heroTag),
         asset: asset,
-        localFilePath: localFilePath,
         isCurrent: isCurrent,
-        image: Image(image: imageProvider, fit: BoxFit.contain, alignment: Alignment.center),
+        image: asset is FileBackedAsset
+            ? const Center(child: Icon(Icons.play_circle_outline, color: Colors.white, size: 64))
+            : Image(
+                image: getFullImageProvider(asset, size: size, remoteThumbnailSize: remoteThumbnailSize),
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+              ),
       ),
     );
   }
@@ -439,13 +440,19 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     final timelineOrigin = ref.watch(timelineServiceProvider).origin;
     final showingOcr = ref.watch(assetViewerProvider.select((s) => s.showingOcr));
 
-    final asset = timelineOrigin == TimelineOrigin.deepLink && currentAsset != null ? currentAsset : _asset;
+    final timelineAsset = _asset;
+    final asset =
+        timelineOrigin == TimelineOrigin.deepLink &&
+            currentAsset != null &&
+            (timelineAsset == null || currentAsset.refersToSameAsset(timelineAsset))
+        ? currentAsset
+        : timelineAsset;
     if (asset == null) {
       return const Center(child: ImmichLoadingIndicator());
     }
 
     BaseAsset displayAsset = asset;
-    final showAssetStack = ref.watch(timelineServiceProvider.select((s) => s.origin != TimelineOrigin.trash));
+    final showAssetStack = timelineOrigin != TimelineOrigin.trash;
     final stackChildren = showAssetStack ? ref.watch(stackChildrenNotifier(asset)).valueOrNull : null;
     if (stackChildren != null && stackChildren.isNotEmpty) {
       final safeStackIndex = stackIndex.clamp(0, stackChildren.length - 1);
@@ -467,8 +474,6 @@ class _AssetPageState extends ConsumerState<AssetPage> {
       _scrollController.snapPosition.snapOffset = _snapOffset;
     }
 
-    final viewIntentFilePath = timelineOrigin == TimelineOrigin.deepLink ? ref.watch(viewIntentFilePathProvider) : null;
-
     return Stack(
       children: [
         SingleChildScrollView(
@@ -483,12 +488,12 @@ class _AssetPageState extends ConsumerState<AssetPage> {
                   height: viewportHeight,
                   child: _buildPhotoView(
                     asset: displayAsset,
-                    heroAttributes: isCurrent
+                    // A file-backed asset has no source thumbnail to participate in a Hero transition.
+                    heroAttributes: isCurrent && asset is! FileBackedAsset
                         ? PhotoViewHeroAttributes(tag: '${asset.heroTag}_${widget.heroOffset}')
                         : null,
                     isCurrent: isCurrent,
                     isPlayingMotionVideo: isPlayingMotionVideo,
-                    localFilePath: viewIntentFilePath,
                     remoteThumbnailSize: thumbnailSize,
                   ),
                 ),
@@ -534,6 +539,36 @@ class _AssetPageState extends ConsumerState<AssetPage> {
             child: AssetStackRow(stack: stackChildren),
           ),
       ],
+    );
+  }
+}
+
+class _FilePreviewUnavailable extends StatelessWidget {
+  const _FilePreviewUnavailable({required this.fileName});
+
+  final String fileName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.image_not_supported_outlined, color: Colors.white70, size: 48),
+          const SizedBox(height: 12),
+          Text(context.t.preview_unavailable, style: context.textTheme.titleMedium?.copyWith(color: Colors.white)),
+          const SizedBox(height: 4),
+          Text(
+            fileName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: context.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+          ),
+        ],
+      ),
     );
   }
 }

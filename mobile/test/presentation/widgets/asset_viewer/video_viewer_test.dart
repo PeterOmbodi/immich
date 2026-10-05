@@ -9,6 +9,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:native_video_player/native_video_player.dart';
 
 import '../../../infrastructure/repository.mock.dart';
+import '../../../service.mocks.dart';
 import '../../../unit/factories/local_asset_factory.dart';
 import '../../../unit/factories/remote_asset_factory.dart';
 import '../../../unit/presentation/presentation_context.dart';
@@ -16,6 +17,7 @@ import '../../../unit/presentation/presentation_context.dart';
 void main() {
   late PresentationContext context;
   late MockStorageRepository storage;
+  late MockAssetService assets;
 
   final local = LocalAssetFactory.create(id: 'local-1').copyWith(type: .video, playbackStyle: .video);
   final remote = RemoteAssetFactory.create(type: .video, localId: local.id);
@@ -23,7 +25,7 @@ void main() {
   setUp(() async {
     context = await PresentationContext.create();
     storage = MockStorageRepository();
-    final assets = context.service.asset.service;
+    assets = context.service.asset.service;
     when(() => assets.getAsset(remote)).thenAnswer((_) async => remote);
     when(() => assets.getAsset(local)).thenAnswer((_) async => local);
     when(() => assets.getLocalAsset(local.id)).thenAnswer((_) async => local);
@@ -51,6 +53,28 @@ void main() {
 
     expect(source?.type, VideoSourceType.file);
     expect(source?.path, endsWith(file.path));
+  });
+
+  testWidgets('resolves file-backed videos without querying AssetService', (tester) async {
+    final file = File('${Directory.systemTemp.path}/immich_missing_file_backed_video.mp4');
+    final asset = FileBackedAsset(
+      path: file.path,
+      checksum: 'file-backed-checksum',
+      name: 'view-intent.mp4',
+      type: AssetType.video,
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+      playbackStyle: AssetPlaybackStyle.video,
+    );
+    when(
+      () => assets.getAsset(asset),
+    ).thenThrow(StateError('File-backed playback must not resolve through AssetService'));
+
+    final source = await pumpViewer(tester, asset);
+
+    expect(source?.type, VideoSourceType.file);
+    expect(source?.path, endsWith('immich_missing_file_backed_video.mp4'));
+    verifyNever(() => assets.getAsset(asset));
   });
 
   testWidgets('plays the server copy when the local file cannot be read', (tester) async {

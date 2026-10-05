@@ -29,6 +29,7 @@ class AppearsInDetails extends ConsumerWidget {
     final remoteAssetId = switch (asset) {
       RemoteAsset(:final id) => id,
       LocalAsset(:final remoteAssetId) => remoteAssetId,
+      FileBackedAsset() => null,
     };
 
     if (remoteAssetId == null) {

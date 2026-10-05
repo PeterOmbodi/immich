@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/services/timeline.service.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/presentation/actions/action.dart';
 import 'package:immich_mobile/presentation/actions/delete.action.dart';
 import 'package:immich_mobile/presentation/actions/edit_asset.action.dart';
+import 'package:immich_mobile/presentation/actions/file_backed_upload.action.dart';
 import 'package:immich_mobile/presentation/actions/restore.action.dart';
 import 'package:immich_mobile/presentation/actions/share.action.dart';
 import 'package:immich_mobile/presentation/actions/upload.action.dart';
@@ -44,20 +46,23 @@ class ViewerBottomBar extends ConsumerWidget {
 
     final originalTheme = context.themeData;
 
-    final actions = <Widget>[
-      ..._actionColumnButtons(context, ref, const [RestoreAction(source: .viewer), ShareAction(source: .viewer)]),
+    final actions = asset is FileBackedAsset
+        ? _actionColumnButtons(context, ref, const [FileBackedUploadAction(source: .viewer)])
+        : <Widget>[
+            ..._actionColumnButtons(context, ref, const [RestoreAction(source: .viewer), ShareAction(source: .viewer)]),
 
-      if (!isInLockedView) ...[
-        if (!isInTrash) ...[
-          ..._actionColumnButtons(context, ref, const [
-            UploadAction(source: .viewer, showProgress: true),
-            EditAssetAction(source: .viewer),
-          ]),
-          if (asset.hasRemote) ImmichColorOverride(color: null, child: AddActionButton(originalTheme: originalTheme)),
-        ],
-        ..._actionColumnButtons(context, ref, const [DeleteAction(source: .viewer)]),
-      ],
-    ];
+            if (!isInLockedView) ...[
+              if (!isInTrash) ...[
+                ..._actionColumnButtons(context, ref, const [
+                  UploadAction(source: .viewer, showProgress: true),
+                  EditAssetAction(source: .viewer),
+                ]),
+                if (asset.hasRemote)
+                  ImmichColorOverride(color: null, child: AddActionButton(originalTheme: originalTheme)),
+              ],
+              ..._actionColumnButtons(context, ref, const [DeleteAction(source: .viewer)]),
+            ],
+          ];
 
     return AnimatedSwitcher(
       duration: Durations.short4,
@@ -93,9 +98,9 @@ class ViewerBottomBar extends ConsumerWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (asset.isImage) OcrToggleButton(asset: asset),
+                          if (asset.isImage && asset is! FileBackedAsset) OcrToggleButton(asset: asset),
                           if (asset.isVideo) VideoControls(videoPlayerName: asset.id),
-                          if (!isReadonlyModeEnabled)
+                          if (!isReadonlyModeEnabled && actions.isNotEmpty)
                             ImmichColorOverride(
                               color: Colors.white,
                               child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: actions),
