@@ -31,15 +31,18 @@ class AssetService {
     required this._trashedLocalRepository,
   });
 
-  Future<BaseAsset?> getAsset(BaseAsset asset) {
-    final id = asset is LocalAsset ? asset.id : (asset as RemoteAsset).id;
-    return asset is LocalAsset ? _localRepository.get(id) : _remoteRepository.get(id);
-  }
+  Future<BaseAsset?> getAsset(BaseAsset asset) => switch (asset) {
+    LocalAsset(:final id) => _localRepository.get(id),
+    RemoteAsset(:final id) => _remoteRepository.get(id),
+    FileBackedAsset() => Future.value(asset),
+  };
 
-  Stream<BaseAsset?> watchAsset(BaseAsset asset) {
-    final id = asset is LocalAsset ? asset.id : (asset as RemoteAsset).id;
-    return asset is LocalAsset ? _localRepository.watch(id) : _remoteRepository.watch(id);
-  }
+  Stream<BaseAsset?> watchAsset(BaseAsset asset) => switch (asset) {
+    LocalAsset(:final id) => _localRepository.watch(id),
+    RemoteAsset(:final id) => _remoteRepository.watch(id),
+    FileBackedAsset(:final checksum) =>
+      _remoteRepository.watchOwnedRemoteByChecksum(checksum).map((remoteAsset) => remoteAsset ?? asset),
+  };
 
   Future<List<LocalAsset?>> getLocalAssetsByChecksum(String checksum) {
     return _localRepository.getByChecksum(checksum);

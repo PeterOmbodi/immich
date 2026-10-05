@@ -26,7 +26,7 @@ void main() {
   });
 
   group('AssetViewerStateNotifier asset watching', () {
-    test('does not send file-backed assets through the generic asset watcher', () {
+    test('replaces a file-backed asset when its remote representation appears', () async {
       final asset = FileBackedAsset(
         path: 'C:/view-intent/image.jpg',
         checksum: 'file-backed-checksum',
@@ -36,11 +36,19 @@ void main() {
         updatedAt: DateTime(2026),
         playbackStyle: AssetPlaybackStyle.image,
       );
+      final remote = RemoteAssetFactory.create(id: 'remote-1');
+      final controller = StreamController<BaseAsset?>();
+      addTearDown(controller.close);
+      when(() => assetService.watchAsset(asset)).thenAnswer((_) => controller.stream);
 
       container.read(assetViewerProvider.notifier).setAsset(asset);
-
       expect(container.read(assetViewerProvider).currentAsset, asset);
-      verifyNever(() => assetService.watchAsset(asset));
+
+      controller.add(remote);
+      await pumpEventQueue();
+
+      expect(container.read(assetViewerProvider).currentAsset, remote);
+      verify(() => assetService.watchAsset(asset)).called(1);
     });
 
     test('propagates stream updates for the current asset into state', () async {

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/infrastructure/repositories/remote_asset.repository.dart';
+import 'package:immich_mobile/utils/option.dart';
 
 import '../repository_context.dart';
 
@@ -15,6 +18,81 @@ void main() {
 
   tearDown(() async {
     await ctx.dispose();
+  });
+
+  group('watchOwnedRemoteByChecksum', () {
+    late String userId;
+
+    setUp(() async {
+      final user = await ctx.newUser();
+      userId = user.id;
+      await ctx.newAuthUser(id: userId);
+    });
+
+    test('ignores existing local and external-library matches while waiting for the uploaded asset', () async {
+      const checksum = 'file-backed-checksum';
+      await ctx.newLocalAsset(checksum: checksum);
+      await ctx.newRemoteAsset(ownerId: userId, checksum: checksum, libraryId: 'external-library');
+
+      final updates = StreamIterator(sut.watchOwnedRemoteByChecksum(checksum));
+      addTearDown(updates.cancel);
+
+      expect(await updates.moveNext(), isTrue);
+      expect(updates.current, isNull);
+
+      final uploaded = await ctx.newRemoteAsset(
+        ownerId: userId,
+        checksum: checksum,
+        libraryIdOption: const Option.none(),
+      );
+
+      expect(await updates.moveNext(), isTrue);
+      expect(updates.current?.id, uploaded.id);
+    });
+
+    test('does not expose non-timeline matches', () async {
+      const checksum = 'file-backed-hidden';
+      await ctx.newRemoteAsset(
+        ownerId: userId,
+        checksum: checksum,
+        visibility: AssetVisibility.hidden,
+        libraryIdOption: const Option.none(),
+      );
+
+      final updates = StreamIterator(sut.watchOwnedRemoteByChecksum(checksum));
+      addTearDown(updates.cancel);
+
+      expect(await updates.moveNext(), isTrue);
+      expect(updates.current, isNull);
+    });
+
+    test('does not expose deleted matches', () async {
+      const checksum = 'file-backed-deleted';
+      await ctx.newRemoteAsset(
+        ownerId: userId,
+        checksum: checksum,
+        deletedAt: DateTime(2024),
+        libraryIdOption: const Option.none(),
+      );
+
+      final updates = StreamIterator(sut.watchOwnedRemoteByChecksum(checksum));
+      addTearDown(updates.cancel);
+
+      expect(await updates.moveNext(), isTrue);
+      expect(updates.current, isNull);
+    });
+
+    test('does not expose another owner\'s match', () async {
+      const checksum = 'file-backed-partner';
+      final partner = await ctx.newUser();
+      await ctx.newRemoteAsset(ownerId: partner.id, checksum: checksum, libraryIdOption: const Option.none());
+
+      final updates = StreamIterator(sut.watchOwnedRemoteByChecksum(checksum));
+      addTearDown(updates.cancel);
+
+      expect(await updates.moveNext(), isTrue);
+      expect(updates.current, isNull);
+    });
   });
 
   group('getByChecksum', () {

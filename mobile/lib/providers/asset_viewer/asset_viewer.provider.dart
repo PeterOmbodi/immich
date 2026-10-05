@@ -58,10 +58,6 @@ class AssetViewerStateNotifier extends Notifier<AssetViewerState> {
   void _watchCurrentAsset(BaseAsset asset) {
     unawaited(_assetSubscription?.cancel());
     _assetSubscription = null;
-    if (asset is FileBackedAsset) {
-      return;
-    }
-
     _assetSubscription = ref.read(assetServiceProvider).watchAsset(asset).listen((updated) {
       if (updated != null) {
         state = state.copyWith(currentAsset: updated);
