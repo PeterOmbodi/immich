@@ -1,12 +1,9 @@
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:immich_mobile/constants/locales.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/timeline.model.dart';
 import 'package:immich_mobile/domain/services/timeline.service.dart';
-import 'package:immich_mobile/generated/codegen_loader.g.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/asset_viewer.page.dart';
 import 'package:immich_mobile/presentation/widgets/asset_viewer/video_viewer.widget.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
@@ -105,29 +102,11 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      EasyLocalization(
-        supportedLocales: locales.values.toList(),
-        path: translationsPath,
-        startLocale: locales.values.first,
-        fallbackLocale: locales.values.first,
-        saveLocale: false,
-        useFallbackTranslations: true,
-        assetLoader: const CodegenLoader(),
-        child: ProviderScope(
-          overrides: context.overrides,
-          child: Builder(
-            builder: (context) => MaterialApp(
-              localizationsDelegates: context.localizationDelegates,
-              supportedLocales: context.supportedLocales,
-              locale: context.locale,
-              home: Row(children: [viewer(firstTimeline, 0), viewer(secondTimeline, 1)]),
-            ),
-          ),
-        ),
-      ),
+    await tester.pumpTestWidget(
+      context,
+      Row(children: [viewer(firstTimeline, 0), viewer(secondTimeline, 1)]),
+      expectSettle: false,
     );
-    await tester.pump();
 
     final exceptions = <Object>[];
     Object? exception;
@@ -146,33 +125,15 @@ void main() {
     final timeline = _imageTimeline();
     addTearDown(timeline.dispose);
 
-    await tester.pumpWidget(
-      EasyLocalization(
-        supportedLocales: locales.values.toList(),
-        path: translationsPath,
-        startLocale: locales.values.first,
-        fallbackLocale: locales.values.first,
-        saveLocale: false,
-        useFallbackTranslations: true,
-        assetLoader: const CodegenLoader(),
-        child: ProviderScope(
-          overrides: [
-            ...context.overrides,
-            timelineServiceProvider.overrideWithValue(timeline),
-            assetViewerProvider.overrideWith(_FileBackedImageViewerNotifier.new),
-          ],
-          child: Builder(
-            builder: (context) => MaterialApp(
-              localizationsDelegates: context.localizationDelegates,
-              supportedLocales: context.supportedLocales,
-              locale: context.locale,
-              home: const AssetViewer(initialIndex: 0),
-            ),
-          ),
-        ),
-      ),
+    await tester.pumpTestWidget(
+      context,
+      const AssetViewer(initialIndex: 0),
+      overrides: [
+        timelineServiceProvider.overrideWithValue(timeline),
+        assetViewerProvider.overrideWith(_FileBackedImageViewerNotifier.new),
+      ],
+      expectSettle: false,
     );
-    await tester.pump();
 
     expect(find.byType(Hero), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -216,33 +177,15 @@ void main() {
     final timeline = _deepLinkImageTimeline();
     addTearDown(timeline.dispose);
 
-    await tester.pumpWidget(
-      EasyLocalization(
-        supportedLocales: locales.values.toList(),
-        path: translationsPath,
-        startLocale: locales.values.first,
-        fallbackLocale: locales.values.first,
-        saveLocale: false,
-        useFallbackTranslations: true,
-        assetLoader: const CodegenLoader(),
-        child: ProviderScope(
-          overrides: [
-            ...context.overrides,
-            timelineServiceProvider.overrideWithValue(timeline),
-            assetViewerProvider.overrideWith(_DeepLinkImageViewerNotifier.new),
-          ],
-          child: Builder(
-            builder: (context) => MaterialApp(
-              localizationsDelegates: context.localizationDelegates,
-              supportedLocales: context.supportedLocales,
-              locale: context.locale,
-              home: const AssetViewer(initialIndex: 0),
-            ),
-          ),
-        ),
-      ),
+    await tester.pumpTestWidget(
+      context,
+      const AssetViewer(initialIndex: 0),
+      overrides: [
+        timelineServiceProvider.overrideWithValue(timeline),
+        assetViewerProvider.overrideWith(_DeepLinkImageViewerNotifier.new),
+      ],
+      expectSettle: false,
     );
-    await tester.pump();
 
     expect(find.byType(Hero), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());

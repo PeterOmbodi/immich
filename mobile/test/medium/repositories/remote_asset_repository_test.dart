@@ -50,7 +50,23 @@ void main() {
       expect(updates.current?.id, uploaded.id);
     });
 
-    test('does not expose non-timeline matches', () async {
+    test('exposes archived upload-library matches', () async {
+      const checksum = 'file-backed-archived';
+      final archived = await ctx.newRemoteAsset(
+        ownerId: userId,
+        checksum: checksum,
+        visibility: AssetVisibility.archive,
+        libraryIdOption: const Option.none(),
+      );
+
+      final updates = StreamIterator(sut.watchOwnedRemoteByChecksum(checksum));
+      addTearDown(updates.cancel);
+
+      expect(await updates.moveNext(), isTrue);
+      expect(updates.current?.id, archived.id);
+    });
+
+    test('does not expose hidden matches', () async {
       const checksum = 'file-backed-hidden';
       await ctx.newRemoteAsset(
         ownerId: userId,

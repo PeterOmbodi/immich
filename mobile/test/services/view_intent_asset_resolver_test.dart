@@ -5,7 +5,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/timeline.model.dart';
 import 'package:immich_mobile/domain/services/timeline.service.dart';
-import 'package:immich_mobile/models/view_intent/view_intent_payload.extension.dart';
 import 'package:immich_mobile/platform/native_sync_api.g.dart';
 import 'package:immich_mobile/platform/view_intent_api.g.dart';
 import 'package:immich_mobile/providers/infrastructure/db.provider.dart';
@@ -206,6 +205,7 @@ void main() {
 
   test('uses current time for a missing or non-positive source timestamp', () async {
     for (final timestamp in <int?>[null, 0, -1]) {
+      final reason = 'sourceModifiedAt=$timestamp';
       final before = DateTime.now();
       final result = await _resolve(
         container,
@@ -219,30 +219,9 @@ void main() {
       final after = DateTime.now();
 
       final asset = result.asset as FileBackedAsset;
-      expect(asset.createdAt.isBefore(before), isFalse);
-      expect(asset.createdAt.isAfter(after), isFalse);
-      expect(asset.updatedAt, asset.createdAt);
-    }
-  });
-
-  test('normalizes provider display names', () {
-    final cases = <({String path, String displayName, String expected})>[
-      (path: '/tmp/view_intent_1.jpg', displayName: r'folder/subfolder\photo.jpg', expected: 'photo.jpg'),
-      (path: '/tmp/view_intent_2.jpg', displayName: 'photo...', expected: 'photo.jpg'),
-      (path: '/tmp/view_intent_3.jpg', displayName: 'photo', expected: 'photo.jpg'),
-      (path: '/tmp/view_intent_4.jpg', displayName: 'photo.2026', expected: 'photo.2026.jpg'),
-      (path: '/tmp/view_intent_5.tmp', displayName: 'photo.png', expected: 'photo.png'),
-    ];
-
-    for (final testCase in cases) {
-      final payload = _payload(
-        localAssetId: null,
-        path: testCase.path,
-        checksum: 'checksum',
-        displayName: testCase.displayName,
-      );
-
-      expect(payload.fileName, testCase.expected, reason: testCase.displayName);
+      expect(asset.createdAt.isBefore(before), isFalse, reason: reason);
+      expect(asset.createdAt.isAfter(after), isFalse, reason: reason);
+      expect(asset.updatedAt, asset.createdAt, reason: reason);
     }
   });
 

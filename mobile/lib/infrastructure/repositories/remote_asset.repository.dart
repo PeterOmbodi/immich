@@ -54,7 +54,7 @@ class RemoteAssetRepository extends DatabaseAccessor<Drift> with $RemoteAssetRep
         rae.ownerId.equalsExp(currentUser.id) &
         rae.libraryId.isNull() &
         rae.deletedAt.isNull() &
-        rae.visibility.equalsValue(AssetVisibility.timeline);
+        (rae.visibility.equalsValue(AssetVisibility.timeline) | rae.visibility.equalsValue(AssetVisibility.archive));
 
     final query = currentUser.select().join([leftOuterJoin(rae, remoteMatch)])..limit(1);
     return query.watchSingleOrNull().map((row) => row?.readTableOrNull(rae)?.toDto());
