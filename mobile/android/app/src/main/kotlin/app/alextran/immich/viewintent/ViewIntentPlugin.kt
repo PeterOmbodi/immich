@@ -22,6 +22,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 private const val TAG = "ViewIntentPlugin"
+private const val VIEW_INTENT_UNAVAILABLE = "VIEW_INTENT_UNAVAILABLE"
 
 class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentListener, ViewIntentHostApi {
   private var context: Context? = null
@@ -96,7 +97,7 @@ class ViewIntentPlugin : FlutterPlugin, ActivityAware, PluginRegistry.NewIntentL
             callback(
               Result.failure(
                 FlutterError(
-                  viewIntentUnavailableErrorCode,
+                  VIEW_INTENT_UNAVAILABLE,
                   "Unable to access the file referenced by the incoming view intent",
                 ),
               ),

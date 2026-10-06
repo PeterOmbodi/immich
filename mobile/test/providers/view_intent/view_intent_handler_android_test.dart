@@ -12,11 +12,9 @@ import 'package:immich_mobile/domain/services/user.service.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/models/auth/auth_state.model.dart';
 import 'package:immich_mobile/platform/view_intent_api.g.dart';
-import 'package:immich_mobile/platform/view_intent_api.g.dart' as pigeon;
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/auth.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
-import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/toast.provider.dart';
 import 'package:immich_mobile/providers/view_intent/active_view_intent_payload_provider.dart';
 import 'package:immich_mobile/providers/view_intent/view_intent_file_path.provider.dart';
@@ -161,7 +159,6 @@ void main() {
         viewIntentServiceProvider.overrideWithValue(viewIntentService),
         viewIntentAssetResolverProvider.overrideWithValue(resolver),
         assetServiceProvider.overrideWithValue(assetService),
-        timelineFactoryProvider.overrideWithValue(timelineFactory),
         toastServiceProvider.overrideWithValue(toastService),
         appRouterProvider.overrideWithValue(router),
         authProvider.overrideWith((ref) {
@@ -249,7 +246,7 @@ void main() {
   });
 
   test('onAppResumed returns to the main screen when the incoming view intent is unavailable', () async {
-    viewIntentService.consumeError = PlatformException(code: pigeon.viewIntentUnavailableErrorCode);
+    viewIntentService.consumeError = PlatformException(code: viewIntentUnavailableErrorCode);
 
     await handler.onAppResumed();
 
