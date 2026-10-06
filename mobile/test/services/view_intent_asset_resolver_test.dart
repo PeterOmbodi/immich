@@ -173,7 +173,7 @@ void main() {
     expect(asset.playbackStyle, AssetPlaybackStyle.imageAnimated);
   });
 
-  test('keeps a DB-backed local asset when its own remote candidate is trashed', () async {
+  test('returns own trashed candidate for a DB-backed local asset', () async {
     final localAsset = _localAsset(id: 'local-1', checksum: 'checksum-1');
     final ownTrashed = _remoteAsset(id: 'own-trashed', checksum: 'checksum-1', isTrashed: true);
     final partnerTimeline = _remoteAsset(id: 'partner-timeline', checksum: 'checksum-1', ownerId: 'partner-1');
@@ -184,10 +184,10 @@ void main() {
 
     final result = await _resolve(container, _payload(localAssetId: 'local-1'));
 
-    expect(result.asset, equals(localAsset));
+    expect(result.asset, equals(ownTrashed.copyWith(localId: localAsset.id)));
   });
 
-  test('uses a partner timeline candidate when own remote is trashed and the local DB row is absent', () async {
+  test('returns own trashed candidate when the local DB row is absent', () async {
     final ownTrashed = _remoteAsset(id: 'own-trashed', checksum: 'checksum-1', isTrashed: true);
     final partnerTimeline = _remoteAsset(id: 'partner-timeline', checksum: 'checksum-1', ownerId: 'partner-1');
     when(
@@ -199,7 +199,7 @@ void main() {
 
     final result = await _resolve(container, _payload(localAssetId: 'local-1'));
 
-    expect((result.asset as RemoteAsset).id, partnerTimeline.id);
+    expect((result.asset as RemoteAsset).id, ownTrashed.id);
     expect((result.asset as RemoteAsset).localId, 'local-1');
   });
 
